@@ -1,0 +1,1284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>z-star Framework — Technical Documentation</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --bg-alt: #0f1420;
+    --panel: #131a2a;
+    --panel-2: #171f33;
+    --border: #232d45;
+    --text: #dbe2f2;
+    --text-dim: #8b96b3;
+    --text-faint: #5b6685;
+    --accent: #7c9fff;
+    --accent-2: #b47cff;
+    --accent-3: #4fd1c5;
+    --accent-warm: #ff9d7c;
+    --code-bg: #0d1220;
+    --success: #4fd1a5;
+    --danger: #ff8177;
+    --radius: 12px;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    background:
+      radial-gradient(1200px 600px at 10% -10%, rgba(124,159,255,0.07), transparent),
+      radial-gradient(1000px 700px at 100% 0%, rgba(180,124,255,0.05), transparent),
+      var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  ::selection { background: rgba(124,159,255,0.35); }
+
+  .shell { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+
+  nav.sidebar {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    padding: 28px 20px 60px;
+    border-right: 1px solid var(--border);
+    background: rgba(10,14,23,0.6);
+    backdrop-filter: blur(10px);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; padding: 0 6px; }
+  .brand .mark {
+    width: 34px; height: 34px; border-radius: 9px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; color: #0a0e17; font-size: 16px;
+  }
+  .brand .name { font-weight: 700; font-size: 17px; letter-spacing: -0.3px; }
+  .brand .name span { color: var(--accent); }
+  .tagline {
+    font-size: 12px; color: var(--text-faint);
+    padding: 0 6px 22px; border-bottom: 1px solid var(--border); margin-bottom: 18px;
+  }
+  .nav-group { margin-bottom: 4px; }
+  .nav-group-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-faint); padding: 14px 10px 6px; font-weight: 700;
+  }
+  nav.sidebar a {
+    display: block; padding: 7px 10px; border-radius: 8px;
+    color: var(--text-dim); text-decoration: none; font-size: 13.5px;
+    transition: all 0.15s ease; border-left: 2px solid transparent;
+  }
+  nav.sidebar a:hover { color: var(--text); background: rgba(124,159,255,0.08); }
+  nav.sidebar a.active {
+    color: var(--accent); background: rgba(124,159,255,0.12); border-left: 2px solid var(--accent);
+  }
+
+  main { padding: 0; overflow-x: hidden; }
+
+  .hero {
+    padding: 70px 48px 44px;
+    border-bottom: 1px solid var(--border);
+  }
+  .hero-inner { max-width: 920px; margin: 0 auto; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 6px 14px; border-radius: 999px;
+    background: rgba(124,159,255,0.08); border: 1px solid rgba(124,159,255,0.25);
+    color: var(--accent); font-size: 12.5px; font-weight: 600; margin-bottom: 22px;
+  }
+  .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  h1.hero-title {
+    font-size: 40px; font-weight: 800; letter-spacing: -1px; line-height: 1.15;
+    margin: 0 0 18px; color: #f2f5fc;
+  }
+  .hero-sub { font-size: 16.5px; color: var(--text-dim); max-width: 700px; margin-bottom: 8px; }
+  .hero-sub b { color: var(--text); font-weight: 600; }
+
+  section { padding: 56px 48px; border-bottom: 1px solid var(--border); }
+  section:last-of-type { border-bottom: none; }
+
+  .eyebrow {
+    font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 10px;
+  }
+  h2 { font-size: 28px; font-weight: 800; letter-spacing: -0.6px; margin: 0 0 14px; color: #f2f5fc; }
+  h3 { font-size: 18px; font-weight: 700; margin: 32px 0 12px; color: #eef1fa; }
+  h4.sub { font-size: 15px; font-weight: 700; margin: 22px 0 8px; color: #e4e9f7; }
+  p { color: var(--text-dim); margin: 0 0 16px; max-width: 760px; }
+  .lead { font-size: 15.5px; color: var(--text-dim); max-width: 760px; margin-bottom: 30px; }
+
+  code {
+    font-family: "SF Mono", "Fira Code", ui-monospace, Menlo, monospace;
+    background: rgba(124,159,255,0.1); color: var(--accent);
+    padding: 2px 6px; border-radius: 5px; font-size: 0.87em;
+  }
+
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px 20px; overflow-x: auto; margin: 0 0 20px; position: relative; max-width: 800px;
+  }
+  pre code { background: none; padding: 0; color: #c9d3ec; font-size: 13px; line-height: 1.65; }
+  .code-label {
+    position: absolute; top: 10px; right: 16px; font-size: 10.5px; color: var(--text-faint);
+    text-transform: uppercase; letter-spacing: 1px; font-family: ui-monospace, monospace;
+  }
+  .kw { color: #c792ea; }
+  .str { color: #c3e88d; }
+  .cmt { color: #5b6685; font-style: italic; }
+  .num-tok { color: #f78c6c; }
+  .fn { color: #82aaff; }
+
+  .grid { display: grid; gap: 16px; margin: 24px 0; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px 22px;
+  }
+  .card h4 { margin: 0 0 8px; font-size: 15px; color: #f0f3fb; }
+  .card p { margin: 0; font-size: 13.5px; color: var(--text-faint); }
+  .card .tag {
+    display: inline-block; margin-top: 12px; font-size: 10.5px; font-family: ui-monospace, monospace;
+    color: var(--accent-3); background: rgba(79,209,197,0.1); padding: 3px 8px; border-radius: 5px;
+  }
+  .card .icon {
+    width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center;
+    justify-content: center; font-size: 16px; margin-bottom: 12px;
+  }
+  .icon-blue { background: rgba(124,159,255,0.15); color: var(--accent); }
+  .icon-purple { background: rgba(180,124,255,0.15); color: var(--accent-2); }
+  .icon-teal { background: rgba(79,209,197,0.15); color: var(--accent-3); }
+  .icon-warm { background: rgba(255,157,124,0.15); color: var(--accent-warm); }
+
+  table { width: 100%; border-collapse: collapse; margin: 18px 0 28px; font-size: 13px; max-width: 900px; }
+  th {
+    text-align: left; color: var(--text-faint); text-transform: uppercase; font-size: 10.5px;
+    letter-spacing: 0.7px; padding: 9px 12px; border-bottom: 1px solid var(--border);
+  }
+  td { padding: 11px 12px; border-bottom: 1px solid var(--border); color: var(--text-dim); vertical-align: top; }
+  td:first-child { color: var(--text); font-weight: 600; font-family: ui-monospace, monospace; font-size: 12px; white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(124,159,255,0.03); }
+  td.center { text-align: center; }
+
+  .pipeline { display: flex; align-items: stretch; gap: 0; margin: 30px 0; overflow-x: auto; padding-bottom: 10px; }
+  .pipe-stage {
+    flex: 1; min-width: 140px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 16px 14px; text-align: center;
+  }
+  .pipe-stage.z-star { background: rgba(124,159,255,0.08); border-color: var(--accent); }
+  .pipe-stage .stage-icon { font-size: 20px; margin-bottom: 6px; }
+  .pipe-stage .stage-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; color: #f0f3fb; }
+  .pipe-stage .stage-desc { font-size: 11px; color: var(--text-faint); }
+  .pipe-arrow { display: flex; align-items: center; justify-content: center; color: var(--text-faint); font-size: 18px; padding: 0 6px; flex-shrink: 0; }
+
+  .callout {
+    border-left: 3px solid var(--accent); background: rgba(124,159,255,0.05);
+    border-radius: 0 10px 10px 0; padding: 15px 20px; margin: 22px 0; font-size: 13.5px;
+    color: var(--text-dim); max-width: 800px;
+  }
+  .callout.warn { border-color: var(--accent-warm); background: rgba(255,157,124,0.05); }
+  .callout.danger { border-color: var(--danger); background: rgba(255,129,119,0.06); }
+  .callout.success { border-color: var(--success); background: rgba(79,209,165,0.05); }
+  .callout b { color: var(--text); }
+  .callout ul { margin: 8px 0 0; padding-left: 18px; }
+  .callout li { margin-bottom: 4px; }
+
+  .status-banner {
+    max-width: 800px; margin: 0 auto 0; padding: 18px 22px;
+    background: rgba(255,157,124,0.06); border: 1px solid rgba(255,157,124,0.3);
+    border-radius: var(--radius); font-size: 13.5px; color: var(--text-dim);
+  }
+  .status-banner b { color: var(--accent-warm); }
+
+  .cfg-tree { background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 0; margin: 18px 0; max-width: 800px; }
+  .cfg-item { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 20px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 12.5px; }
+  .cfg-item:last-child { border-bottom: none; }
+  .cfg-key { font-family: ui-monospace, monospace; color: var(--accent-3); }
+  .cfg-val { font-family: ui-monospace, monospace; color: var(--text-faint); text-align: right; }
+
+  .tree {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px 24px; font-family: ui-monospace, "SF Mono", monospace; font-size: 12.5px;
+    line-height: 1.85; color: var(--text-dim); margin: 18px 0; max-width: 800px;
+  }
+  .tree .dir { color: var(--accent); font-weight: 600; }
+  .tree .cmt2 { color: var(--text-faint); }
+
+  .badge-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 6px 0 20px; }
+  .badge {
+    font-size: 11px; padding: 5px 10px; border-radius: 999px; background: var(--panel-2);
+    border: 1px solid var(--border); color: var(--text-dim); font-family: ui-monospace, monospace;
+  }
+  .badge.on { color: var(--success); border-color: rgba(79,209,165,0.3); }
+  .badge.manual { color: var(--accent-warm); border-color: rgba(255,157,124,0.3); }
+
+  footer { padding: 36px 48px 56px; text-align: center; color: var(--text-faint); font-size: 13px; }
+
+  @media (max-width: 900px) {
+    .shell { grid-template-columns: 1fr; }
+    nav.sidebar { display: none; }
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    h1.hero-title { font-size: 30px; }
+    section, .hero { padding-left: 22px; padding-right: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <nav class="sidebar">
+    <div class="brand">
+ 
+      <div class="name">z-<span>star</span></div>
+    </div>
+    <div class="tagline">Self-supervised multimodal<br>representation learning framework</div>
+
+    <div class="nav-group">
+      <div class="nav-group-title">Overview</div>
+      <a href="#overview">Introduction</a>
+      <!-- <a href="#status">Status &amp; Scope</a> -->
+      <a href="#architecture">Architecture</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-title">Data</div>
+      <a href="#modalities">Modality Types</a>
+      <a href="#dataset">Dataset &amp; Collation</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-title">Model</div>
+      <a href="#encoders">Encoders</a>
+      <a href="#fusion">Fusion Strategies</a>
+      <a href="#vqvae">VQ-VAE Quantization</a>
+      <a href="#using-model">Using the Model (API)</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-title">Training</div>
+      <a href="#objectives">SSL Objectives Overview</a>
+      <a href="#using-losses">Using SSL Losses Directly</a>
+      <a href="#staged">Staged Training</a>
+      <a href="#config">Configuration Reference</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-title">Guides</div>
+      <a href="#quickstart">Quickstart</a>
+      <a href="#reconstruction">Reconstruction Guide</a>
+      <a href="#comparison">Comparison Guide</a>
+      <a href="#downstream">Downstream Tasks</a>
+      <a href="#evaluation">Latent Space Analysis</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-title">Reference</div>
+      <a href="#structure">Directory Structure</a>
+      <a href="#extending">Extending the Framework</a>
+    </div>
+  </nav>
+
+  <main>
+
+    <!-- HERO -->
+    <div class="hero" id="overview">
+      <div class="hero-inner">
+      
+        <h1 class="hero-title">z-star: self-supervised representation framework for transplant patient data</h1>
+        <p class="hero-sub">
+          z-star (<code>z*</code>) is the name given to a fixed-length latent vector produced by encoding a
+          patient's static risk factors, longitudinal lab values, medication history, and clinical events through
+          a set of trained neural encoders, fusing the resulting per-modality posteriors, and reading off the mean
+          of the fused distribution. The vector is computed once by a trained model and does not require
+          retraining at inference time.
+        </p>
+      </div>
+    </div>
+
+    <!-- STATUS -->
+    <!-- <section id="status">
+      <div class="eyebrow">Read this first</div>
+      <h2>Status &amp; Scope</h2>
+      <div class="status-banner">
+        <b>This codebase has been exercised only with synthetic (randomly generated) data.</b>
+        Training runs, architecture combinations, and evaluation code paths have been checked for correctness
+        (correct tensor shapes, no NaNs, decreasing training loss, successful checkpointing) — not for predictive
+        validity. It has not been run on real clinical data and no hyperparameters have been tuned for any
+        real outcome.
+      </div>
+
+      <h3>What has been verified</h3>
+      <table>
+        <tr><th>Check</th><th>Result</th></tr>
+        <tr><td>Forward/backward pass, all 6 encoders</td><td>Runs without shape errors or NaNs</td></tr>
+        <tr><td>Fusion: PoE, MoE, Attention, Concat</td><td>Each runs end-to-end with mixed missing modalities</td></tr>
+        <tr><td>VQ-VAE (discrete / hybrid latent)</td><td>Runs; codebook perplexity &gt; 1 observed (codebook is being used, not collapsed)</td></tr>
+        <tr><td>Training loop, 100 synthetic patients, 100 epochs</td><td>Train/val total loss decreases across epochs</td></tr>
+        <tr><td>z-star extraction and save/load round-trip</td><td>Produces a <code>[N, latent_dim]</code> matrix; loads back correctly</td></tr>
+        <tr><td>Downstream heads (linear probe, MLP)</td><td>Train without error on frozen z-star</td></tr>
+      </table>
+
+      <h3>What has not been verified</h3>
+      <ul style="color: var(--text-dim); max-width: 760px; padding-left: 20px;">
+        <li>Whether z-star captures anything clinically meaningful — synthetic data is uncorrelated Gaussian noise, so there is nothing meaningful for it to capture.</li>
+        <li>Any AUROC / AUPRC / R² number produced by the code in its current state is <b style="color:var(--text)">not evidence of predictive skill</b> — synthetic labels are drawn independently of synthetic features. Values near 0.5 AUROC are expected and correct.</li>
+        <li>Runtime and memory behavior at realistic cohort sizes and sequence lengths.</li>
+        <li>Whether the chosen default architectures (Transformer for creatinine, GRU for medications, etc.) are appropriate choices for a specific dataset — these are configurable defaults, not validated recommendations.</li>
+      </ul>
+
+      <div class="callout warn">
+        Treat every code example on this page as a description of <b>how to call the framework</b>, not as a
+        claim about what results it will produce on your data. Results depend entirely on the dataset you provide.
+      </div>
+    </section> -->
+
+    <!-- ARCHITECTURE -->
+    <section id="architecture">
+      <div class="eyebrow">System Design</div>
+      <h2>Architecture</h2>
+      <p class="lead">
+        Every modality — regardless of type — is processed through the same three-stage pipeline: independent
+        per-modality encoding, posterior fusion into one shared latent, and per-modality decoding used for the
+        reconstruction-based training signal.
+      </p>
+
+      <div class="pipeline">
+        <div class="pipe-stage">
+          <div class="stage-icon">🗂️</div>
+          <div class="stage-title">Patient record</div>
+          <div class="stage-desc">static + temporal + event tables</div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-stage">
+          <div class="stage-icon">🧠</div>
+          <div class="stage-title">Per-modality encoders</div>
+          <div class="stage-desc">MLP / GRU / LSTM / Transformer / TCN / SetTransformer</div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-stage">
+          <div class="stage-icon">⊕</div>
+          <div class="stage-title">Fusion</div>
+          <div class="stage-desc">PoE / MoE / Attention / Concat</div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-stage z-star">
+          <div class="stage-icon">✦</div>
+          <div class="stage-title">z-star</div>
+          <div class="stage-desc">mean of fused posterior</div>
+        </div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-stage">
+          <div class="stage-icon">🔁</div>
+          <div class="stage-title">Decoders</div>
+          <div class="stage-desc">per-modality reconstruction</div>
+        </div>
+      </div>
+
+      <h3>Forward pass</h3>
+      <table>
+        <tr><th>Step</th><th>Operation</th><th>Output</th></tr>
+        <tr><td>1</td><td>Each present modality is encoded independently</td><td><code>(mu_i, log_var_i)</code> per modality</td></tr>
+        <tr><td>2</td><td>Optional vector quantization (if <code>latent_type</code> is discrete/hybrid)</td><td><code>z_q</code>, codebook indices, commitment loss</td></tr>
+        <tr><td>3</td><td>Reparameterization samples a latent per modality (training only; deterministic at eval)</td><td><code>z_i</code> per modality</td></tr>
+        <tr><td>4</td><td>Fusion combines all present-modality posteriors</td><td><code>mu_shared, log_var_shared</code></td></tr>
+        <tr><td>5</td><td>z-star is read off as the mean of the fused posterior</td><td><code>z* = mu_shared</code></td></tr>
+        <tr><td>6</td><td>Each modality's decoder reconstructs from the shared latent</td><td>per-modality reconstruction</td></tr>
+      </table>
+
+      <div class="callout">
+        <b>Missing modalities are handled by masking, not imputation-before-training.</b> Each sample carries a
+        per-modality binary mask. With PoE fusion, a missing modality contributes zero precision to the fused
+        posterior — it has no effect on the result — and the prior <code>N(0,I)</code> is always included as a
+        baseline expert, so a fully-missing patient still receives a defined (uninformative) z-star rather than
+        an error.
+      </div>
+    </section>
+
+    <!-- MODALITIES -->
+    <section id="modalities">
+      <div class="eyebrow">Data</div>
+      <h2>Modality Types</h2>
+      <p class="lead">
+        Table schemas are not hardcoded. Each variable group is declared as one of three modality types in
+        <code>config.yaml</code>; the modality type determines which encoder families are applicable.
+      </p>
+
+      <div class="grid grid-3">
+        <div class="card">
+          <div class="icon icon-blue">▦</div>
+          <h4>static</h4>
+          <p>Flat tabular features that do not change over time: donor age, cold ischaemia time, HLA mismatches,
+          recipient comorbidities.</p>
+          <span class="tag">encoder: mlp</span>
+        </div>
+        <div class="card">
+          <div class="icon icon-purple">〰</div>
+          <h4>temporal</h4>
+          <p>Irregularly-sampled longitudinal series: a creatinine trajectory, or medication doses recorded at
+          each visit or dose-change event.</p>
+          <span class="tag">encoder: gru / lstm / transformer / tcn</span>
+        </div>
+        <div class="card">
+          <div class="icon icon-teal">◈</div>
+          <h4>event</h4>
+          <p>Discrete, sparsely-timed occurrences: rejection episodes, hospitalizations, drug switches.</p>
+          <span class="tag">encoder: set_transformer</span>
+        </div>
+      </div>
+
+      <h3>Example modality declaration</h3>
+      <pre><span class="code-label">config.yaml</span><code><span class="kw">modalities</span>:
+  <span class="fn">creatinine</span>:
+    <span class="kw">enabled</span>: <span class="num-tok">true</span>
+    <span class="kw">type</span>: <span class="str">temporal</span>
+    <span class="kw">input_dim</span>: <span class="num-tok">1</span>
+    <span class="kw">max_seq_len</span>: <span class="num-tok">200</span>
+    <span class="kw">encoder</span>: <span class="str">transformer</span>
+    <span class="kw">decoder</span>: <span class="str">temporal</span>
+    <span class="kw">encoder_config</span>:
+      <span class="kw">d_model</span>: <span class="num-tok">128</span>
+      <span class="kw">nhead</span>: <span class="num-tok">4</span>
+      <span class="kw">num_layers</span>: <span class="num-tok">3</span>
+      <span class="kw">time_encoding</span>: <span class="str">sinusoidal</span>  <span class="cmt"># sinusoidal | learnable</span>
+      <span class="kw">pooling</span>: <span class="str">cls</span>              <span class="cmt"># cls | mean | last</span></code></pre>
+
+      <div class="callout">
+        Adding a modality requires no code changes to the orchestrator — declare it in the config and point it at
+        a registered encoder/decoder name. It does still require choosing sensible <code>encoder_config</code>
+        values for your data (sequence length, hidden size); the defaults shown throughout this document are
+        illustrative, not tuned.
+      </div>
+    </section>
+
+    <!-- DATASET -->
+    <section id="dataset">
+      <div class="eyebrow">Data</div>
+      <h2>Dataset &amp; Collation</h2>
+      <p class="lead">
+        <code>ZStarDataset</code> normalizes each modality using only its non-missing samples.
+        <code>zstar_collate</code> pads variable-length sequences within a batch and produces a
+        <code>lengths</code> tensor used for packed-sequence RNNs and attention masks.
+      </p>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="icon icon-warm">▤</div>
+          <h4>Static handling</h4>
+          <p>A row that is entirely <code>NaN</code> is flagged missing (<code>mask=0</code>). Z-score
+          normalization statistics are computed only from valid rows; missing values are set to zero after
+          normalization.</p>
+        </div>
+        <div class="card">
+          <div class="icon icon-warm">▥</div>
+          <h4>Temporal / event handling</h4>
+          <p>Each patient supplies a <code>(timestamps, values)</code> tuple, or <code>None</code> if the
+          modality is entirely absent. Within a batch, sequences are padded to the batch's longest sequence.</p>
+        </div>
+      </div>
+
+      <pre><span class="code-label">python</span><code><span class="kw">from</span> zstar.data <span class="kw">import</span> ZStarDataset, zstar_collate
+
+data_dict = {
+    <span class="str">"donor_recipient"</span>: {<span class="str">"type"</span>: <span class="str">"static"</span>,   <span class="str">"data"</span>: static_array},       <span class="cmt"># np.ndarray [N, D], NaN rows = missing</span>
+    <span class="str">"creatinine"</span>:      {<span class="str">"type"</span>: <span class="str">"temporal"</span>, <span class="str">"data"</span>: creatinine_sequences}, <span class="cmt"># list length N of (timestamps, values) or None</span>
+    <span class="str">"events"</span>:          {<span class="str">"type"</span>: <span class="str">"event"</span>,    <span class="str">"data"</span>: rejection_events},
+}
+
+dataset = ZStarDataset(data_dict, normalize=<span class="num-tok">True</span>)
+<span class="fn">print</span>(dataset.modality_info)
+<span class="cmt"># {'creatinine': {'type': 'temporal', 'availability': 0.847}, ...}</span>
+<span class="cmt"># availability is the fraction of patients for which that modality is present</span></code></pre>
+
+      <h4 class="sub">Exact shape produced per sample by <code>zstar_collate</code></h4>
+      <table>
+        <tr><th>Modality type</th><th>Batch dict entry</th></tr>
+        <tr><td>static</td><td><code>{"x": [B, D], "mask": [B], "type": "static"}</code></td></tr>
+        <tr><td>temporal / event</td><td><code>{"x": [B, T_max, D], "mask": [B], "timestamps": [B, T_max], "lengths": [B], "type": "temporal"}</code></td></tr>
+      </table>
+      <p><code>T_max</code> is the maximum sequence length within that specific batch, not a global constant —
+      it varies from batch to batch.</p>
+    </section>
+
+    <!-- ENCODERS -->
+    <section id="encoders">
+      <div class="eyebrow">Model Components</div>
+      <h2>Encoders</h2>
+      <p class="lead">
+        Every encoder implements the same call signature —
+        <code>forward(x, timestamps, lengths) → (mu, log_var)</code> — so the model orchestrator never branches
+        on modality type. Static encoders ignore the temporal arguments.
+      </p>
+
+      <div class="grid grid-3">
+        <div class="card">
+          <div class="icon icon-blue">▦</div>
+          <h4>MLP</h4>
+          <p>Feed-forward encoder for static tabular features.</p>
+          <span class="tag">modality type: static</span>
+        </div>
+        <div class="card">
+          <div class="icon icon-purple">⟲</div>
+          <h4>GRU / LSTM</h4>
+          <p>Recurrent encoders. Time is injected by adding a sinusoidal or learnable time encoding to the
+          projected input at each step. Padded steps are excluded via <code>pack_padded_sequence</code>.</p>
+          <span class="tag">modality type: temporal</span>
+        </div>
+        <div class="card">
+          <div class="icon icon-teal">◫</div>
+          <h4>Transformer</h4>
+          <p>Self-attention with continuous time encoding in place of integer positional encoding, so it does not
+          assume evenly spaced samples. Supports CLS / mean / last pooling.</p>
+          <span class="tag">modality type: temporal / event</span>
+        </div>
+        <div class="card">
+          <div class="icon icon-warm">▩</div>
+          <h4>TCN</h4>
+          <p>Causal dilated convolutions with residual connections.</p>
+          <span class="tag">modality type: temporal</span>
+        </div>
+        <div class="card">
+          <div class="icon icon-purple">⬡</div>
+          <h4>Set Transformer</h4>
+          <p>Inducing-point attention pooling over an unordered set of events — the output does not depend on
+          event order.</p>
+          <span class="tag">modality type: event</span>
+        </div>
+        <div class="card">
+          <div class="icon icon-blue">⏱</div>
+          <h4>Time Encoding</h4>
+          <p>Shared utility used by GRU / LSTM / Transformer / TCN. <code>sinusoidal</code> is parameter-free;
+          <code>learnable</code> is a small MLP from scalar time to a vector.</p>
+          <span class="tag">shared utility</span>
+        </div>
+      </div>
+
+      <pre><span class="code-label">encoders/base.py</span><code><span class="kw">class</span> <span class="fn">BaseEncoder</span>(nn.Module, ABC):
+    <span class="kw">def</span> <span class="fn">forward</span>(
+        self,
+        x: Tensor,                          <span class="cmt"># [B, D] static  |  [B, T, D] temporal/event</span>
+        timestamps: Optional[Tensor] = <span class="num-tok">None</span>, <span class="cmt"># [B, T]; ignored by static encoders</span>
+        lengths: Optional[Tensor] = <span class="num-tok">None</span>,    <span class="cmt"># [B]; true sequence length before padding</span>
+    ) -> Tuple[Tensor, Tensor]:
+        <span class="str">"""Returns (mu, log_var), each [B, latent_dim]."""</span></code></pre>
+    </section>
+
+    <!-- FUSION -->
+    <section id="fusion">
+      <div class="eyebrow">Model Components</div>
+      <h2>Fusion Strategies</h2>
+      <p class="lead">
+        Fusion combines each modality's <code>(mu_i, log_var_i)</code> and presence mask into a single fused
+        posterior. z-star is derived from this fused posterior's mean.
+      </p>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="icon icon-blue">⊗</div>
+          <h4>Product of Experts <span class="tag">default</span></h4>
+          <p>Analytically combines diagonal Gaussians by precision-weighted averaging (closed-form, no learned
+          parameters). A missing modality contributes zero precision. The prior <code>N(0,I)</code> always
+          participates as an additional expert.</p>
+        </div>
+        <div class="card">
+          <div class="icon icon-purple">⊘</div>
+          <h4>Mixture of Experts</h4>
+          <p>A small learned gating network produces softmax weights over available modalities. Missing
+          modalities are masked out of the softmax before weighting.</p>
+        </div>
+        <div class="card">
+          <div class="icon icon-teal">⌗</div>
+          <h4>Attention Fusion</h4>
+          <p>A learned query vector attends over the stacked per-modality means, with a padding mask for absent
+          modalities.</p>
+        </div>
+        <div class="card">
+          <div class="icon icon-warm">▭</div>
+          <h4>Concat Fusion</h4>
+          <p>Concatenates masked means, passes them through an MLP that outputs the fused mean and log-variance
+          directly. No distributional assumption is made about the individual experts.</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <b>z* is defined as <code>mu_shared</code> at evaluation time</b>, i.e. <code>model.eval()</code> +
+        <code>extract_zstar()</code>. During training, <code>z_shared</code> is a stochastic sample from the fused
+        posterior via the reparameterization trick — this is what the decoders and downstream losses actually
+        see while the model is being fit.
+      </div>
+    </section>
+
+    <!-- VQ-VAE -->
+    <section id="vqvae">
+      <div class="eyebrow">Model Components</div>
+      <h2>VQ-VAE Quantization</h2>
+      <p class="lead">
+        Setting <code>model.latent_type: discrete</code> (or <code>hybrid</code>) routes each modality's
+        continuous latent through a learned codebook.
+      </p>
+
+      <table>
+        <tr><th>Mechanism</th><th>Description</th></tr>
+        <tr><td>Codebook lookup</td><td>Nearest-neighbor search over <code>num_embeddings</code> learned vectors via <code>torch.cdist</code></td></tr>
+        <tr><td>Straight-through estimator</td><td>Gradients are copied from <code>z_q</code> to <code>z_e</code> so the encoder remains trainable through the non-differentiable argmin</td></tr>
+        <tr><td>EMA codebook update</td><td>Exponential moving average of cluster assignments updates the codebook directly when <code>use_ema: true</code>, avoiding a separate codebook loss term</td></tr>
+        <tr><td>Dead code restart</td><td>Codes with EMA usage below <code>restart_threshold</code> are reinitialized from randomly sampled encoder outputs in the current batch</td></tr>
+        <tr><td>Commitment loss</td><td><code>commitment_cost · ‖z_e − sg(z_q)‖²</code>, added to the total loss under the <code>vq_commitment</code> objective</td></tr>
+      </table>
+
+      <pre><span class="code-label">config.yaml</span><code><span class="kw">model</span>:
+  <span class="kw">latent_type</span>: <span class="str">discrete</span>      <span class="cmt"># continuous | discrete | hybrid</span>
+  <span class="kw">vq</span>:
+    <span class="kw">num_embeddings</span>: <span class="num-tok">512</span>       <span class="cmt"># codebook size (K)</span>
+    <span class="kw">embedding_dim</span>: <span class="num-tok">64</span>        <span class="cmt"># must equal model.latent_dim</span>
+    <span class="kw">commitment_cost</span>: <span class="num-tok">0.25</span>
+    <span class="kw">use_ema</span>: <span class="num-tok">true</span>
+    <span class="kw">ema_decay</span>: <span class="num-tok">0.99</span>
+    <span class="kw">restart_threshold</span>: <span class="num-tok">1.0</span></code></pre>
+
+      <div class="callout">
+        <code>run.py</code> auto-sets <code>objectives.vq_commitment.enabled=true</code> whenever
+        <code>model.latent_type</code> is <code>discrete</code> or <code>hybrid</code>. In <code>hybrid</code>
+        mode, the continuous <code>(mu, log_var)</code> are still what fusion and the KL term operate on; the
+        discrete code exists in parallel per modality.
+      </div>
+
+      <div class="callout warn">
+        Codebook perplexity was checked to be greater than 1 on synthetic data (i.e. more than one code is
+        actually used), which rules out immediate collapse. This is a weak sanity check, not evidence that the
+        codebook is capturing anything semantically useful — that can only be assessed on real data.
+      </div>
+    </section>
+
+    <!-- USING THE MODEL -->
+    <section id="using-model">
+      <div class="eyebrow">Model API</div>
+      <h2>Using the Model</h2>
+      <p class="lead">
+        <code>ZStarModel</code> is a standard <code>torch.nn.Module</code>. This section documents its public
+        methods and what each one returns, based on the implementation in
+        <code>zstar/models/zstar_model.py</code>.
+      </p>
+
+      <h3>1. Instantiating from config</h3>
+      <pre><span class="code-label">python</span><code><span class="kw">from</span> omegaconf <span class="kw">import</span> OmegaConf
+<span class="kw">from</span> zstar.models <span class="kw">import</span> ZStarModel
+
+cfg = OmegaConf.load(<span class="str">"zstar/config.yaml"</span>)
+model = ZStarModel(cfg)   <span class="cmt"># builds one ModalityModule per enabled modality + the fusion module</span></code></pre>
+      <p>The <code>input_dim</code> declared per modality in <code>cfg.modalities</code> must match the feature
+      dimension of the data you pass in. Mismatches raise a shape error at the first linear layer of the
+      corresponding encoder.</p>
+
+      <h3>2. Training forward pass</h3>
+      <pre><span class="code-label">python</span><code>model.train()
+outputs = model(batch)  <span class="cmt"># batch: output of zstar_collate()</span></code></pre>
+      <p><code>outputs</code> is a dictionary. Its keys, and when each one is present:</p>
+      <table>
+        <tr><th>Key</th><th>Shape / type</th><th>Always present?</th></tr>
+        <tr><td>recons</td><td><code>{modality: tensor}</code>, per-modality reconstruction</td><td>yes</td></tr>
+        <tr><td>mus / log_vars</td><td><code>{modality: [B, latent_dim]}</code>, per-modality posterior params</td><td>yes</td></tr>
+        <tr><td>zs</td><td><code>{modality: [B, latent_dim]}</code>, per-modality sampled latent</td><td>yes</td></tr>
+        <tr><td>masks</td><td><code>{modality: [B]}</code>, presence mask per modality</td><td>yes</td></tr>
+        <tr><td>mu_shared / log_var_shared</td><td><code>[B, latent_dim]</code>, fused posterior</td><td>yes</td></tr>
+        <tr><td>z_shared</td><td><code>[B, latent_dim]</code>; equals <code>mu_shared</code> in eval mode</td><td>yes</td></tr>
+        <tr><td>vq_losses</td><td><code>{modality: {"vq_loss": ..., "perplexity": ...}}</code></td><td>only if <code>latent_type</code> is discrete/hybrid</td></tr>
+        <tr><td>temporal_preds / temporal_targets</td><td><code>{modality: [B, horizon, D]}</code></td><td>only if <code>objectives.temporal_prediction.enabled</code> and modality is listed under it</td></tr>
+      </table>
+
+      <h3>3. Extracting z-star (deterministic inference)</h3>
+      <pre><span class="code-label">python</span><code>model.eval()
+z_star = model.extract_zstar(batch)   <span class="cmt"># [B, latent_dim], no gradient, calls model.eval() internally</span></code></pre>
+      <p><code>extract_zstar</code> only encodes and fuses — it does not run any decoder, so it is cheaper than a
+      full forward pass when you only need the representation.</p>
+
+      <h3>4. Decoding from an arbitrary latent vector</h3>
+      <pre><span class="code-label">python</span><code><span class="cmt"># Decode a specific modality from any [B, latent_dim] tensor,</span>
+<span class="cmt"># not necessarily one produced by encoding real data</span>
+recon = model.modules_dict[<span class="str">"creatinine"</span>].decode(z_star)
+
+<span class="cmt"># For temporal decoders you can control the output sequence length:</span>
+recon = model.modules_dict[<span class="str">"creatinine"</span>].decode(
+    z_star,
+    target_timestamps=timestamps,   <span class="cmt"># [B, T] — if provided, output has T steps</span>
+    target_lengths=lengths,         <span class="cmt"># [B] — used if timestamps is None</span>
+)
+<span class="cmt"># If neither is given, the temporal decoder falls back to modalities.&lt;name&gt;.max_seq_len</span></code></pre>
+
+      <h3>5. Imputing a missing modality</h3>
+      <pre><span class="code-label">python</span><code><span class="cmt"># partial_batch contains only the modalities that ARE available for this patient</span>
+imputed = model.impute(partial_batch, target_modality=<span class="str">"creatinine"</span>)
+<span class="cmt"># Internally: z = extract_zstar(partial_batch); return modules_dict["creatinine"].decode(z, ...)</span></code></pre>
+
+      <div class="callout">
+        <code>model.modules_dict</code> is an <code>nn.ModuleDict</code> keyed by modality name — this is how you
+        reach a specific encoder or decoder directly, for example to freeze one modality's encoder or to inspect
+        its parameters.
+      </div>
+    </section>
+
+    <!-- SSL OBJECTIVES OVERVIEW -->
+    <section id="objectives">
+      <div class="eyebrow">Training</div>
+      <h2>Self-Supervised Objectives — Overview</h2>
+      <p class="lead">
+        Objectives are toggled and weighted independently in <code>config.yaml</code> under
+        <code>objectives.&lt;name&gt;.enabled</code> / <code>.weight</code>. The next section documents which ones
+        are wired automatically into <code>ZStarModel.forward()</code> versus which require manual integration.
+      </p>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="icon icon-blue">↺</div>
+          <h4>Reconstruction</h4>
+          <p>MSE / BCE / Huber between input and decoder output, computed only over present samples, summed
+          across enabled modalities.</p>
+        </div>
+        <div class="card">
+          <div class="icon icon-purple">𝒩</div>
+          <h4>KL Divergence (β-VAE)</h4>
+          <p>Analytical KL between the fused posterior and <code>N(0,I)</code>, scaled by an annealed β
+          (linear / cyclical / monotonic schedule).</p>
+        </div>
+        <div class="card">
+          <div class="icon icon-teal">⊞</div>
+          <h4>VQ Commitment</h4>
+          <p>Active only when <code>latent_type</code> is discrete/hybrid — pulls encoder outputs toward their
+          assigned codebook entry.</p>
+        </div>
+        <div class="card">
+          <div class="icon icon-warm">⇄</div>
+          <h4>Contrastive (NT-Xent)</h4>
+          <p>Treats one patient's latents from two different modalities as a positive pair against all other
+          patients in the batch.</p>
+        </div>
+        <div class="card">
+          <div class="icon icon-blue">▨</div>
+          <h4>Masked Reconstruction</h4>
+          <p>Loss function exists in <code>losses/masked_prediction.py</code>. <b style="color:var(--accent-warm)">Not called automatically</b> — see below.</p>
+        </div>
+        <div class="card">
+          <div class="icon icon-purple">⏭</div>
+          <h4>Temporal Prediction</h4>
+          <p>A small GRU head forecasts the last <code>prediction_horizon</code> steps of a chosen temporal
+          modality from z-star.</p>
+        </div>
+        <div class="card">
+          <div class="icon icon-teal">≈</div>
+          <h4>Alignment (MMD)</h4>
+          <p>Kernel-based (RBF) distributional distance between modality-pair latents; <code>strategy: mmd</code>
+          or <code>strategy: contrastive</code>.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- USING SSL LOSSES DIRECTLY -->
+    <section id="using-losses">
+      <div class="eyebrow">Training</div>
+      <h2>Using SSL Losses Directly</h2>
+      <p class="lead">
+        Each loss is a plain, independently importable function under <code>zstar/losses/</code>. The
+        orchestrator <code>compute_total_loss()</code> calls a subset of them automatically based on
+        <code>cfg.objectives</code>; you can also call any of them directly for debugging, unit testing, or a
+        custom training loop.
+      </p>
+
+      <h3>What is wired automatically vs. what requires manual code</h3>
+      <table>
+        <tr><th>Objective</th><th>Auto-wired in <code>compute_total_loss</code>?</th><th>Condition</th></tr>
+        <tr><td>reconstruction</td><td><span class="badge on">yes</span></td><td>always, when enabled</td></tr>
+        <tr><td>kl</td><td><span class="badge on">yes</span></td><td>always, when enabled</td></tr>
+        <tr><td>vq_commitment</td><td><span class="badge on">yes</span></td><td>requires <code>outputs["vq_losses"]</code>, i.e. discrete/hybrid latent</td></tr>
+        <tr><td>contrastive</td><td><span class="badge on">yes</span></td><td>needs ≥2 modalities present in the same sample</td></tr>
+        <tr><td>alignment</td><td><span class="badge on">yes</span></td><td>needs ≥2 modalities present in the same sample</td></tr>
+        <tr><td>temporal_prediction</td><td><span class="badge on">yes</span></td><td>requires listing target modalities under <code>objectives.temporal_prediction.modalities</code></td></tr>
+        <tr><td>masked_reconstruction</td><td><span class="badge manual">manual</span></td><td><code>ZStarModel.forward()</code> does not apply masking or populate <code>outputs["masked_recons"]</code> — see below</td></tr>
+      </table>
+
+      <div class="callout warn">
+        Setting <code>objectives.masked_reconstruction.enabled: true</code> in the config currently has
+        <b>no effect</b> on training, because <code>compute_total_loss</code> only adds this term when
+        <code>outputs.get("masked_recons")</code> is truthy, and the default forward pass never sets that key.
+        The loss function and the masking utility both exist and are usable — they are just not connected to the
+        default training loop. A manual wiring example is given below.
+      </div>
+
+      <h3>Calling the orchestrator (standard path)</h3>
+      <pre><span class="code-label">python</span><code><span class="kw">from</span> zstar.losses <span class="kw">import</span> compute_total_loss
+
+outputs = model(batch)
+losses = compute_total_loss(batch, outputs, cfg, beta=<span class="num-tok">1.0</span>, stage_name=<span class="num-tok">None</span>)
+<span class="cmt"># losses is a dict: {"recon": ..., "kl": ..., "contrastive": ..., ..., "total": ...}</span>
+losses[<span class="str">"total"</span>].backward()</code></pre>
+
+      <h3>Calling individual loss functions directly</h3>
+      <pre><span class="code-label">python</span><code><span class="kw">from</span> zstar.losses.reconstruction <span class="kw">import</span> reconstruction_loss
+<span class="kw">from</span> zstar.losses.kl <span class="kw">import</span> kl_divergence
+<span class="kw">from</span> zstar.losses.contrastive <span class="kw">import</span> contrastive_loss, nt_xent_loss
+<span class="kw">from</span> zstar.losses.alignment <span class="kw">import</span> alignment_loss, mmd_loss
+<span class="kw">from</span> zstar.losses.vq_loss <span class="kw">import</span> vq_aggregate_loss
+
+<span class="cmt"># Reconstruction for one modality (handles static [B,D] and temporal [B,T,D])</span>
+r_loss = reconstruction_loss(
+    x=batch[<span class="str">"donor_recipient"</span>][<span class="str">"x"</span>],
+    x_recon=outputs[<span class="str">"recons"</span>][<span class="str">"donor_recipient"</span>],
+    mask=batch[<span class="str">"donor_recipient"</span>][<span class="str">"mask"</span>],
+    loss_fn=<span class="str">"mse"</span>,             <span class="cmt"># mse | bce | huber</span>
+    mod_type=<span class="str">"static"</span>,
+)
+
+<span class="cmt"># KL between the fused posterior and N(0, I)</span>
+kl = kl_divergence(outputs[<span class="str">"mu_shared"</span>], outputs[<span class="str">"log_var_shared"</span>])
+
+<span class="cmt"># Contrastive alignment across all present modality pairs in the batch</span>
+c_loss = contrastive_loss(outputs[<span class="str">"zs"</span>], outputs[<span class="str">"masks"</span>], temperature=<span class="num-tok">0.07</span>)
+
+<span class="cmt"># Or just one pair of modalities directly:</span>
+pair_loss = nt_xent_loss(outputs[<span class="str">"zs"</span>][<span class="str">"creatinine"</span>], outputs[<span class="str">"zs"</span>][<span class="str">"medications"</span>], temperature=<span class="num-tok">0.07</span>)
+
+<span class="cmt"># MMD alignment (strategy="mmd") or NT-Xent alignment (strategy="contrastive")</span>
+a_loss = alignment_loss(outputs[<span class="str">"zs"</span>], outputs[<span class="str">"masks"</span>], strategy=<span class="str">"mmd"</span>)</code></pre>
+
+      <h3>Manually wiring masked reconstruction (not built into the default forward pass)</h3>
+      <p>
+        To use masked reconstruction as it is implemented today, mask the input yourself before encoding, run
+        the model with the masked input, and compute the loss against the masked positions. This means writing a
+        small custom step rather than relying on <code>ZStarTrainer</code> as-is:
+      </p>
+      <pre><span class="code-label">python</span><code><span class="kw">from</span> zstar.data.masking <span class="kw">import</span> MaskGenerator
+<span class="kw">from</span> zstar.losses.masked_prediction <span class="kw">import</span> masked_prediction_loss
+
+masker = MaskGenerator(mask_ratio=<span class="num-tok">0.15</span>, strategy=<span class="str">"random"</span>)  <span class="cmt"># random | block | feature_wise</span>
+
+<span class="cmt"># 1. Mask one modality's input before encoding</span>
+x_orig = batch[<span class="str">"donor_recipient"</span>][<span class="str">"x"</span>]
+x_masked, mask_positions = masker(x_orig, mod_type=<span class="str">"static"</span>)
+
+<span class="cmt"># 2. Substitute the masked tensor into a copy of the batch and run the model</span>
+masked_batch = dict(batch)
+masked_batch[<span class="str">"donor_recipient"</span>] = dict(batch[<span class="str">"donor_recipient"</span>])
+masked_batch[<span class="str">"donor_recipient"</span>][<span class="str">"x"</span>] = x_masked
+outputs = model(masked_batch)
+
+<span class="cmt"># 3. Compare the reconstruction only at the masked positions</span>
+recon = outputs[<span class="str">"recons"</span>][<span class="str">"donor_recipient"</span>]
+extra_loss = masked_prediction_loss(
+    predictions={<span class="str">"donor_recipient"</span>: recon},
+    targets={<span class="str">"donor_recipient"</span>: x_orig},
+    mask_positions={<span class="str">"donor_recipient"</span>: mask_positions},
+)
+<span class="cmt"># Add extra_loss into your total loss alongside compute_total_loss(...)</span></code></pre>
+
+      <div class="callout">
+        If you rely on masked reconstruction for a real experiment, either extend
+        <code>ZStarModel.forward()</code> to apply <code>MaskGenerator</code> internally and populate
+        <code>outputs["masked_recons"]</code> / <code>outputs["mask_positions"]</code>, or run the manual step
+        above inside a custom training loop copied from <code>ZStarTrainer._run_batch</code>.
+      </div>
+    </section>
+
+    <!-- STAGED TRAINING -->
+    <section id="staged">
+      <div class="eyebrow">Training</div>
+      <h2>Staged Training</h2>
+      <p class="lead">
+        Objectives can optionally be phased in over the course of training via <code>training.stages</code>,
+        rather than all being active from epoch 1.
+      </p>
+
+      <pre><span class="code-label">config.yaml</span><code><span class="kw">training</span>:
+  <span class="kw">stages</span>:
+    - <span class="kw">name</span>: <span class="str">"reconstruction_only"</span>
+      <span class="kw">epochs</span>: <span class="num-tok">50</span>
+      <span class="kw">objectives</span>: [reconstruction, kl]
+    - <span class="kw">name</span>: <span class="str">"add_contrastive"</span>
+      <span class="kw">epochs</span>: <span class="num-tok">75</span>
+      <span class="kw">objectives</span>: [reconstruction, kl, contrastive, alignment]
+    - <span class="kw">name</span>: <span class="str">"full"</span>
+      <span class="kw">epochs</span>: <span class="num-tok">75</span>
+      <span class="kw">objectives</span>: all</code></pre>
+
+      <p>Stage epoch counts are cumulative — in this example, epochs 1–50 use stage one, 51–125 use stage two,
+      126–200 use stage three. Omit <code>training.stages</code> entirely to train all
+      <code>enabled: true</code> objectives jointly from epoch 1, which is the default.</p>
+    </section>
+
+    <!-- CONFIG -->
+    <section id="config">
+      <div class="eyebrow">Reference</div>
+      <h2>Configuration Reference</h2>
+      <p class="lead">
+        Everything is driven by <code>zstar/config.yaml</code>, loaded with OmegaConf. Values can be overridden
+        from the command line with dot-notation, which OmegaConf merges over the file defaults.
+      </p>
+
+      <h3>Top-level sections</h3>
+      <div class="cfg-tree">
+        <div class="cfg-item"><span class="cfg-key">project</span><span class="cfg-val">name, seed</span></div>
+        <div class="cfg-item"><span class="cfg-key">model</span><span class="cfg-val">latent_dim, fusion, latent_type, beta, vq{}</span></div>
+        <div class="cfg-item"><span class="cfg-key">modalities</span><span class="cfg-val">per-modality type / encoder / decoder / dims</span></div>
+        <div class="cfg-item"><span class="cfg-key">objectives</span><span class="cfg-val">enabled + weight per SSL loss</span></div>
+        <div class="cfg-item"><span class="cfg-key">training</span><span class="cfg-val">batch_size, epochs, lr, scheduler, stages</span></div>
+        <div class="cfg-item"><span class="cfg-key">data</span><span class="cfg-val">path, normalize</span></div>
+        <div class="cfg-item"><span class="cfg-key">logging</span><span class="cfg-val">log_every, save_dir</span></div>
+        <div class="cfg-item"><span class="cfg-key">downstream</span><span class="cfg-val">graft_loss{}, egfr_trajectory{}</span></div>
+      </div>
+
+      <h3>Command-line overrides</h3>
+      <pre><span class="code-label">shell</span><code><span class="cmt"># switch fusion strategy</span>
+python -m zstar.run model.fusion=attention
+
+<span class="cmt"># switch to discrete VQ-VAE latents</span>
+python -m zstar.run model.latent_type=discrete
+
+<span class="cmt"># swap the encoder used for one modality</span>
+python -m zstar.run modalities.creatinine.encoder=lstm
+
+<span class="cmt"># combine multiple overrides</span>
+python -m zstar.run model.beta=8.0 training.epochs=200 model.fusion=moe</code></pre>
+    </section>
+
+    <!-- QUICKSTART -->
+    <section id="quickstart">
+      <div class="eyebrow">Guides</div>
+      <h2>Quickstart</h2>
+      <p class="lead">
+        Run the framework end-to-end with synthetic data to confirm your environment is set up correctly, before
+        connecting real data.
+      </p>
+
+      <h3>1. Install dependencies</h3>
+      <pre><span class="code-label">shell</span><code>pip install torch omegaconf scikit-learn matplotlib numpy umap-learn</code></pre>
+
+      <h3>2. Run the default pipeline</h3>
+      <pre><span class="code-label">shell</span><code>cd INSERM_2026
+python -m zstar.run</code></pre>
+      <p>This generates synthetic static/temporal/event data, trains for the configured number of epochs,
+      extracts z-star, saves it to <code>outputs/zstar_embeddings.npy</code>, and runs the downstream comparison
+      described in the Comparison Guide below. Expect this run to demonstrate that the code executes correctly —
+      not to produce a meaningful predictive result, since the labels and features are both synthetic and
+      independent of each other.</p>
+
+      <h3>3. Faster iteration while developing</h3>
+      <pre><span class="code-label">shell</span><code>python -m zstar.run training.epochs=5 training.batch_size=16 logging.log_every=1</code></pre>
+
+      <h3>4. Connect real data</h3>
+      <p>Replace <code>make_synthetic_data()</code> in <code>zstar/run.py</code> with a function returning the
+      same dictionary shape from your actual tables:</p>
+      <pre><span class="code-label">python</span><code><span class="kw">def</span> <span class="fn">load_real_data</span>(cfg) -> <span class="fn">dict</span>:
+    <span class="kw">return</span> {
+        <span class="str">"donor_recipient"</span>: {<span class="str">"type"</span>: <span class="str">"static"</span>,   <span class="str">"data"</span>: donor_recipient_df.values},
+        <span class="str">"creatinine"</span>:      {<span class="str">"type"</span>: <span class="str">"temporal"</span>, <span class="str">"data"</span>: creatinine_per_patient},
+        <span class="str">"medications"</span>:     {<span class="str">"type"</span>: <span class="str">"temporal"</span>, <span class="str">"data"</span>: drug_dose_series},
+        <span class="str">"events"</span>:          {<span class="str">"type"</span>: <span class="str">"event"</span>,    <span class="str">"data"</span>: rejection_episodes},
+    }</code></pre>
+      <p>Each <code>modalities.&lt;name&gt;.input_dim</code> in <code>config.yaml</code> must be updated to match
+      the actual feature count of your real data before running.</p>
+    </section>
+
+    <!-- RECONSTRUCTION GUIDE -->
+    <section id="reconstruction">
+      <div class="eyebrow">Guides</div>
+      <h2>Reconstruction Guide</h2>
+      <p class="lead">
+        "Reconstruction" covers three distinct operations in this framework: reconstructing a modality the model
+        already saw (training signal), imputing a modality that is missing for a specific patient, and decoding
+        an arbitrary point in latent space (for interpolation or inspection).
+      </p>
+
+      <h3>1. Reconstruction as training signal</h3>
+      <p>During a normal forward pass, every present modality is decoded from <code>z_shared</code> and compared
+      to its own input — this is what <code>outputs["recons"]</code> contains and what the reconstruction loss
+      is computed on.</p>
+      <pre><span class="code-label">python</span><code>outputs = model(batch)
+recon = outputs[<span class="str">"recons"</span>][<span class="str">"creatinine"</span>]   <span class="cmt"># [B, T, 1], reconstructed from the SAME creatinine data</span></code></pre>
+      <p>This tells you how well the model can reproduce a modality it was allowed to see — useful for checking
+      training convergence, not for imputation.</p>
+
+      <h3>2. Imputing a modality that is missing for a patient</h3>
+      <pre><span class="code-label">python</span><code><span class="cmt"># partial_batch must NOT contain the "creatinine" key at all, or must have</span>
+<span class="cmt"># mask=0 for it — either way the encoder for "creatinine" is skipped</span>
+imputed_creatinine = model.impute(partial_batch, target_modality=<span class="str">"creatinine"</span>)</code></pre>
+      <p>Internally this calls <code>extract_zstar(partial_batch)</code> — which fuses only the modalities
+      present in <code>partial_batch</code> — then decodes the target modality from that z-star. The quality of
+      this imputation depends entirely on how much the fused latent actually correlates with the target modality,
+      which is only measurable on real data.</p>
+
+      <h3>3. Evaluating cross-modal reconstruction quality across a dataset</h3>
+      <pre><span class="code-label">python</span><code><span class="kw">from</span> zstar.evaluation <span class="kw">import</span> cross_modal_reconstruction
+
+metrics = cross_modal_reconstruction(
+    model, dataset,
+    source_modalities=[<span class="str">"medications"</span>, <span class="str">"events"</span>],
+    target_modality=<span class="str">"creatinine"</span>,
+    device=device,
+)
+<span class="cmt"># {"mse": float, "r2": float}</span></code></pre>
+      <p>This function iterates the full dataset, keeps only samples where <b>both</b> the source modalities and
+      the target modality are present (so it can compute ground truth), encodes using only the source
+      modalities, decodes the target, and reports MSE and R² against the real target values.</p>
+
+      <table>
+        <tr><th>Detail</th><th>Behavior</th></tr>
+        <tr><td>Evaluation subset</td><td>Only samples where all listed sources <i>and</i> the target are present</td></tr>
+        <tr><td>Static target</td><td>Compared directly, <code>[N_valid, D]</code></td></tr>
+        <tr><td>Temporal target</td><td>Compared per-timestep after flattening; sequence-length mismatches between prediction and target are not automatically truncated in this function — ensure the decoder's output length matches the target's length for the samples being compared</td></tr>
+        <tr><td>R² definition</td><td><code>sklearn.metrics.r2_score</code> on the flattened arrays; negative values mean worse than predicting the mean</td></tr>
+      </table>
+
+      <div class="callout warn">
+        On synthetic data, MSE ≈ 1.0 and R² ≈ 0 to slightly negative is the expected and correct result — the
+        source and target modalities are independently generated random noise, so there is no signal to
+        transfer between them. A positive R² here would indicate a bug, not a good model.
+      </div>
+
+      <h3>4. Decoding an arbitrary latent point</h3>
+      <p>Useful for interpolation between two patients or manual latent traversal — bypasses the encoder
+      entirely:</p>
+      <pre><span class="code-label">python</span><code><span class="kw">from</span> zstar.evaluation <span class="kw">import</span> latent_interpolation
+
+path = latent_interpolation(
+    model,
+    z1=zstar_embeddings[<span class="num-tok">0</span>],
+    z2=zstar_embeddings[<span class="num-tok">1</span>],
+    target_modality=<span class="str">"donor_recipient"</span>,
+    n_steps=<span class="num-tok">10</span>,
+)
+<span class="cmt"># [10, D] — linear interpolation in latent space, each point decoded independently</span></code></pre>
+    </section>
+
+    <!-- COMPARISON GUIDE -->
+    <section id="comparison">
+      <div class="eyebrow">Guides</div>
+      <h2>Comparison Guide</h2>
+      <p class="lead">
+        This section covers four distinct kinds of comparison the framework supports, and how to run each one.
+        None of them replace a proper held-out evaluation or cross-validation on real data with real outcomes.
+      </p>
+
+      <h3>1. Comparing architecture configurations</h3>
+      <p>Because everything is config-driven, comparing two architectures means running training twice with
+      different overrides and comparing the resulting validation loss or reconstruction metrics:</p>
+      <pre><span class="code-label">shell</span><code>python -m zstar.run model.fusion=poe        logging.save_dir=checkpoints/poe
+python -m zstar.run model.fusion=attention  logging.save_dir=checkpoints/attention</code></pre>
+      <p>Compare the <code>best_val_loss</code> printed at the end of each run, and/or run
+      <code>cross_modal_reconstruction</code> with the same source/target pair against both checkpoints.
+      <code>ZStarTrainer.train()</code> returns a <code>history</code> dict with per-epoch
+      <code>train</code>/<code>val</code> loss components if you want to plot the curves rather than compare a
+      single number.</p>
+
+      <h3>2. Ablating SSL objectives</h3>
+      <p>Toggle one objective at a time and compare the downstream result, holding the architecture fixed:</p>
+      <pre><span class="code-label">shell</span><code>python -m zstar.run objectives.contrastive.enabled=false
+python -m zstar.run objectives.alignment.enabled=false
+python -m zstar.run objectives.contrastive.enabled=false objectives.alignment.enabled=false</code></pre>
+      <p>Because SSL pretraining has no single scalar "success" metric, ablations should be judged by whatever
+      downstream task you actually care about (Section 3 below), not by pretraining loss alone — a lower
+      reconstruction loss does not necessarily correspond to a more useful z-star.</p>
+
+      <h3>3. Comparing a linear probe against a nonlinear head on frozen z-star</h3>
+      <pre><span class="code-label">python</span><code><span class="kw">from</span> zstar.evaluation <span class="kw">import</span> compare_approaches
+
+results = compare_approaches(
+    zstar=zstar_embeddings,          <span class="cmt"># [N, latent_dim], already extracted and frozen</span>
+    graft_loss_labels=labels,        <span class="cmt"># [N], 0/1</span>
+    latent_dim=cfg.model.latent_dim,
+)
+<span class="cmt"># {"linear_probe": {...}, "mlp_frozen_zstar": {...}}</span>
+<span class="cmt"># each entry: {"best_val_loss": float, "auroc": float, "auprc": float}</span></code></pre>
+      <p><code>compare_approaches</code> trains two heads on the same frozen z-star and a single random
+      train/val split (80/20): a <code>GraftLossPredictor</code> with no hidden layers (linear probe) and one
+      with <code>[64, 32]</code> hidden units (MLP). The gap between them indicates how much of whatever signal
+      exists in z-star is linearly separable versus requiring a nonlinear decision boundary.</p>
+
+      <div class="callout warn">
+        This function uses a single random split and does not fix a fold seed across calls other than via
+        <code>torch.randperm</code> without an explicit generator — re-running it will produce a different split
+        and therefore different AUROC values. For a real evaluation, wrap this in repeated k-fold
+        cross-validation and report mean ± standard deviation, rather than trusting one run.
+      </div>
+
+      <h3>4. Comparing frozen z-star against a raw-feature baseline</h3>
+      <p>
+        The framework does not include a built-in raw-feature baseline model — this comparison needs to be
+        assembled manually, but uses the same downstream head and training function so the comparison is
+        apples-to-apples:
+      </p>
+      <pre><span class="code-label">python</span><code><span class="kw">import</span> numpy <span class="kw">as</span> np
+<span class="kw">from</span> zstar.evaluation.downstream <span class="kw">import</span> GraftLossPredictor, train_downstream_head
+
+<span class="cmt"># Baseline: concatenate raw per-modality static means (no learned encoder at all)</span>
+raw_features = np.concatenate([
+    dataset.modalities[<span class="str">"donor_recipient"</span>][<span class="str">"data"</span>].numpy(),
+    <span class="cmt"># add other static modalities as needed; temporal ones need manual summarization</span>
+    <span class="cmt"># (e.g. mean/last-value per patient) since this baseline has no sequence encoder</span>
+], axis=<span class="num-tok">1</span>)
+
+baseline_head = GraftLossPredictor(latent_dim=raw_features.shape[<span class="num-tok">1</span>], hidden_dims=[<span class="num-tok">64</span>, <span class="num-tok">32</span>])
+baseline_results = train_downstream_head(baseline_head, raw_features, labels, task=<span class="str">"binary_classification"</span>)
+
+<span class="cmt"># Compare baseline_results["auroc"] against results["mlp_frozen_zstar"]["auroc"] from Section 3</span></code></pre>
+      <p>This comparison tells you whether the self-supervised pretraining is adding information beyond what a
+      simple feature-concatenation baseline already provides. It is the comparison most directly relevant to
+      justifying the framework's added complexity, and it is the one most in need of real data and proper
+      cross-validation before drawing conclusions.</p>
+
+      <div class="callout danger">
+        <b>None of the comparisons above are meaningful on synthetic data</b> — every number they produce there
+        is noise measuring noise. They are documented here as procedures to run once real labeled outcomes
+        (graft loss, eGFR) are available, not as results to report from the current codebase.
+      </div>
+    </section>
+
+    <!-- DOWNSTREAM -->
+    <section id="downstream">
+      <div class="eyebrow">Guides</div>
+      <h2>Downstream Tasks</h2>
+      <p class="lead">
+        Downstream heads are simple MLPs trained on the frozen z-star matrix; the encoder and fusion module are
+        not updated during this phase.
+      </p>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="icon icon-warm">⚠</div>
+          <h4>Graft Loss Prediction</h4>
+          <p><code>GraftLossPredictor(latent_dim, hidden_dims)</code> — binary classification head. Trained via
+          <code>train_downstream_head(..., task="binary_classification")</code>, which reports AUROC and AUPRC
+          on a held-out split.</p>
+        </div>
+        <div class="card">
+          <div class="icon icon-teal">📈</div>
+          <h4>eGFR Trajectory Prediction</h4>
+          <p><code>EGFRTrajectoryPredictor(latent_dim, prediction_points, hidden_dims)</code> — regresses graft
+          function at the configured future time points (e.g. 30 / 90 / 180 / 365 days) in a single forward
+          pass.</p>
+        </div>
+      </div>
+
+      <pre><span class="code-label">python</span><code><span class="kw">from</span> zstar.evaluation.downstream <span class="kw">import</span> EGFRTrajectoryPredictor, train_downstream_head
+
+head = EGFRTrajectoryPredictor(
+    latent_dim=cfg.model.latent_dim,
+    prediction_points=[<span class="num-tok">30</span>, <span class="num-tok">90</span>, <span class="num-tok">180</span>, <span class="num-tok">365</span>],
+    hidden_dims=[<span class="num-tok">64</span>, <span class="num-tok">32</span>],
+)
+results = train_downstream_head(
+    head, zstar_embeddings, egfr_targets,   <span class="cmt"># egfr_targets: [N, 4]</span>
+    task=<span class="str">"regression"</span>,
+)</code></pre>
+
+      <p><code>train_downstream_head</code> always instantiates a fresh 80/20 train/val split, trains with Adam
+      and early best-checkpoint tracking by validation loss, and for
+      <code>task="binary_classification"</code> additionally computes AUROC/AUPRC on the validation split at the
+      end of training.</p>
+    </section>
+
+    <!-- EVALUATION -->
+    <section id="evaluation">
+      <div class="eyebrow">Guides</div>
+      <h2>Latent Space Analysis</h2>
+      <p class="lead">Tools for inspecting the structure of z-star before relying on it downstream.</p>
+
+      <div class="grid grid-4">
+        <div class="card"><h4>UMAP / t-SNE</h4><p>2-D projections, optionally colored by an outcome label.</p></div>
+        <div class="card"><h4>Clustering</h4><p>k-means or hierarchical clustering with silhouette score.</p></div>
+        <div class="card"><h4>Interpolation</h4><p>Linear interpolation between two patients' z-star, decoded at each step.</p></div>
+        <div class="card"><h4>Cross-modal reconstruction</h4><p>See the Reconstruction Guide above.</p></div>
+      </div>
+
+      <pre><span class="code-label">python</span><code><span class="kw">from</span> zstar.evaluation <span class="kw">import</span> umap_plot, tsne_plot, cluster_analysis
+
+umap_plot(zstar_embeddings, labels=graft_loss_labels, save_path=<span class="str">"outputs/umap.png"</span>)
+tsne_plot(zstar_embeddings, labels=graft_loss_labels, save_path=<span class="str">"outputs/tsne.png"</span>)
+
+clusters = cluster_analysis(zstar_embeddings, n_clusters=<span class="num-tok">5</span>, method=<span class="str">"kmeans"</span>)
+<span class="cmt"># {"labels": [N], "silhouette": float, "n_clusters": 5}</span></code></pre>
+
+      <div class="callout">
+        A UMAP or t-SNE plot showing visually separated clusters is not, by itself, evidence that the clusters
+        correspond to clinically distinct patient groups — cross-reference cluster assignment against known
+        outcomes or chart review before drawing that conclusion.
+      </div>
+    </section>
+
+    <!-- STRUCTURE -->
+    <section id="structure">
+      <div class="eyebrow">Reference</div>
+      <h2>Directory Structure</h2>
+      <div class="tree">
+<span class="dir">zstar/</span>
+├── run.py                    <span class="cmt2"># entry point; contains make_synthetic_data()</span>
+├── config.yaml                <span class="cmt2"># default configuration</span>
+│
+├── <span class="dir">encoders/</span>                <span class="cmt2"># mlp · gru · lstm · transformer · tcn · set_transformer</span>
+├── <span class="dir">decoders/</span>                <span class="cmt2"># mlp · temporal</span>
+├── <span class="dir">quantization/</span>            <span class="cmt2"># vq.py — codebook, straight-through, EMA</span>
+├── <span class="dir">fusion/</span>                  <span class="cmt2"># poe · moe · attention · concat</span>
+├── <span class="dir">losses/</span>                  <span class="cmt2"># reconstruction · kl · vq · contrastive · alignment · masked · temporal</span>
+├── <span class="dir">models/</span>
+│   ├── modality_module.py   <span class="cmt2"># encoder + optional VQ + decoder per modality</span>
+│   └── zstar_model.py       <span class="cmt2"># orchestrates all modules + fusion → z-star</span>
+├── <span class="dir">data/</span>                    <span class="cmt2"># dataset · collate · masking · augmentations</span>
+├── <span class="dir">training/</span>                <span class="cmt2"># trainer · KL / LR schedulers</span>
+└── <span class="dir">evaluation/</span>              <span class="cmt2"># extract · latent analysis · downstream heads · comparison</span>
+      </div>
+    </section>
+
+    <!-- EXTENDING -->
+    <section id="extending">
+      <div class="eyebrow">Reference</div>
+      <h2>Extending the Framework</h2>
+      <p class="lead">Encoders, decoders, and fusion strategies use a name-based registry pattern.</p>
+
+      <pre><span class="code-label">encoders/my_encoder.py</span><code><span class="kw">from</span> . <span class="kw">import</span> register_encoder
+<span class="kw">from</span> .base <span class="kw">import</span> BaseEncoder
+
+<span class="kw">@register_encoder</span>(<span class="str">"my_encoder"</span>)
+<span class="kw">class</span> <span class="fn">MyEncoder</span>(BaseEncoder):
+    <span class="kw">def</span> <span class="fn">forward</span>(self, x, timestamps=<span class="num-tok">None</span>, lengths=<span class="num-tok">None</span>):
+        <span class="cmt"># ... your architecture ...</span>
+        <span class="kw">return</span> mu, log_var</code></pre>
+
+      <p>Reference it from any modality block in <code>config.yaml</code>:</p>
+      <pre><span class="code-label">config.yaml</span><code><span class="kw">modalities</span>:
+  <span class="fn">my_modality</span>:
+    <span class="kw">encoder</span>: <span class="str">my_encoder</span></code></pre>
+
+      <p>The same pattern applies to <code>register_decoder</code> (in <code>decoders/</code>) and
+      <code>register_fusion</code> (in <code>fusion/</code>). New objectives are added by writing a loss function
+      under <code>losses/</code> and adding a corresponding branch in
+      <code>losses/__init__.py:compute_total_loss</code> that reads from <code>outputs</code>.</p>
+    </section>
+
+    <footer>
+      z-star framework — technical documentation. Verified on synthetic data only; see Status &amp; Scope.
+    </footer>
+
+  </main>
+</div>
+
+<script>
+  const sections = document.querySelectorAll('section, .hero');
+  const navLinks = document.querySelectorAll('nav.sidebar a');
+  function onScroll() {
+    let currentId = '';
+    const scrollPos = window.scrollY + 140;
+    sections.forEach(sec => { if (sec.offsetTop <= scrollPos) currentId = sec.id; });
+    navLinks.forEach(link => {
+      link.classList.toggle('active', link.getAttribute('href') === '#' + currentId);
+    });
+  }
+  window.addEventListener('scroll', onScroll);
+  onScroll();
+</script>
+
+</body>
+</html>

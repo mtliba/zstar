@@ -1,0 +1,161 @@
+project:
+  name: "zstar_kidney_transplant"
+  seed: 42
+
+model:
+  latent_dim: 64
+  fusion: poe                     # poe | moe | attention | concat
+  latent_type: continuous         # continuous | discrete | hybrid
+  beta: 4.0
+  cond_dim: 0
+
+  vq:
+    num_embeddings: 512
+    embedding_dim: 64
+    commitment_cost: 0.25
+    use_ema: true
+    ema_decay: 0.99
+    restart_threshold: 1.0
+
+modalities:
+  donor_recipient:
+    enabled: true
+    type: static
+    input_dim: 85
+    encoder: mlp
+    decoder: mlp
+    encoder_config:
+      hidden_dims: [256, 128]
+      dropout: 0.1
+    decoder_config:
+      hidden_dims: [128, 256]
+      dropout: 0.1
+
+  creatinine:
+    enabled: true
+    type: temporal
+    input_dim: 1
+    max_seq_len: 200
+    encoder: transformer
+    decoder: temporal
+    encoder_config:
+      d_model: 128
+      nhead: 4
+      num_layers: 3
+      dim_feedforward: 256
+      dropout: 0.1
+      time_encoding: sinusoidal
+      pooling: cls
+    decoder_config:
+      type: gru
+      hidden_dim: 128
+      num_layers: 2
+      max_seq_len: 200
+
+  medications:
+    enabled: true
+    type: temporal
+    input_dim: 12
+    max_seq_len: 365
+    encoder: gru
+    decoder: temporal
+    encoder_config:
+      hidden_dim: 128
+      num_layers: 2
+      bidirectional: true
+      dropout: 0.1
+      time_encoding: learnable
+      pooling: last
+    decoder_config:
+      type: gru
+      hidden_dim: 128
+      num_layers: 2
+      max_seq_len: 365
+
+  events:
+    enabled: true
+    type: event
+    input_dim: 16
+    max_seq_len: 50
+    encoder: set_transformer
+    decoder: mlp
+    encoder_config:
+      d_model: 64
+      num_heads: 4
+      num_inducing: 32
+      num_layers: 2
+    decoder_config:
+      hidden_dims: [64, 128]
+      dropout: 0.1
+
+objectives:
+  reconstruction:
+    enabled: true
+    weight: 1.0
+    loss_fn: mse
+
+  kl:
+    enabled: true
+    weight: 1.0
+
+  vq_commitment:
+    enabled: false
+    weight: 0.25
+
+  contrastive:
+    enabled: true
+    weight: 0.5
+    temperature: 0.07
+
+  masked_reconstruction:
+    enabled: false
+    weight: 0.3
+    mask_ratio: 0.15
+    mask_strategy: random
+
+  temporal_prediction:
+    enabled: false
+    weight: 0.3
+    prediction_horizon: 5
+    modalities: [creatinine]
+
+  alignment:
+    enabled: true
+    weight: 0.5
+    strategy: mmd
+    temperature: 0.07
+
+training:
+  batch_size: 32
+  epochs: 100
+  lr: 1.0e-3
+  weight_decay: 1.0e-5
+  val_split: 0.2
+  optimizer: adam
+  grad_clip: 1.0
+
+  kl_warmup_epochs: 20
+  kl_schedule: linear
+
+  scheduler:
+    type: reduce_on_plateau
+    patience: 15
+    factor: 0.5
+
+data:
+  path: data/
+  normalize: true
+
+logging:
+  log_every: 10
+  save_dir: checkpoints/
+
+downstream:
+  graft_loss:
+    enabled: true
+    hidden_dims: [64, 32]
+    task: binary_classification
+  egfr_trajectory:
+    enabled: false
+    prediction_points: [30, 90, 180, 365]
+    hidden_dims: [64, 32]
