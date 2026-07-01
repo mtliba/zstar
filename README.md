@@ -886,5 +886,4 @@ corresponding branch in `losses/__init__.py:compute_total_loss` that reads from 
 
 ## License
 
-Research code, no license file added yet — all rights reserved by default until a license is
-chosen.
+MIT — see [LICENSE](LICENSE).
