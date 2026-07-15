@@ -1,12 +1,9 @@
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'mmvae_pharm'))
-
 import torch
 import torch.nn as nn
 from typing import Optional, Tuple
 from omegaconf import DictConfig
 
-from models.modality_vae import build_mlp
+from zstar._mlp_utils import build_mlp
 from . import register_encoder
 from .base import BaseEncoder
 

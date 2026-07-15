@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "transplant-zstar"
+version = "0.1.0"
+description = "Self-supervised, multimodal representation learning framework for kidney transplant patient data"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+authors = [
+    { name = "Marouane Tliba" },
+]
+keywords = [
+    "self-supervised-learning",
+    "vae",
+    "vq-vae",
+    "multimodal",
+    "transplant",
+    "clinical-machine-learning",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+]
+dependencies = [
+    "torch>=2.0.0",
+    "omegaconf>=2.3.0",
+    "numpy>=1.24.0",
+    "scikit-learn>=1.3.0",
+    "matplotlib>=3.7.0",
+]
+
+[project.optional-dependencies]
+umap = ["umap-learn>=0.5.3"]
+
+[project.urls]
+Homepage = "https://github.com/mtliba/zstar"
+Documentation = "https://mtliba.github.io/zstar/"
+Repository = "https://github.com/mtliba/zstar"
+Issues = "https://github.com/mtliba/zstar/issues"
+
+[tool.setuptools]
+package-dir = { "zstar" = "." }
+packages = [
+    "zstar",
+    "zstar.encoders",
+    "zstar.decoders",
+    "zstar.quantization",
+    "zstar.fusion",
+    "zstar.losses",
+    "zstar.models",
+    "zstar.data",
+    "zstar.training",
+    "zstar.evaluation",
+]
+
+[tool.setuptools.package-data]
+zstar = ["config.yaml"]
