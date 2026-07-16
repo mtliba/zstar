@@ -243,6 +243,11 @@ def run(
             temporal_tables={"apgf": (apgf_df, "days_since_tx")},
             landmark_day=landmark_day,
             duration_col=duration_col, event_col=event_col, id_col=ID_COL,
+            # Both outcomes live on the same time axis; rebasing only one
+            # would leave the other inflated by landmark_day and silently
+            # empty a competing cause.
+            additional_duration_cols=[c for c in ("GraftSurvivalDays", "PatientSurvivalDays")
+                                      if c != duration_col],
         )
         apgf_df = temporal_out["apgf"]
 

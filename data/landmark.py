@@ -19,7 +19,7 @@ The model then only ever sees information genuinely available at the landmark,
 so downstream performance reflects forecasting rather than detection.
 """
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -34,6 +34,7 @@ def apply_landmark(
     id_col: str = "natt1",
     rebase_durations: bool = True,
     drop_observations_after_event: bool = True,
+    additional_duration_cols: Optional[List[str]] = None,
     verbose: bool = True,
 ) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame], dict]:
     """
@@ -57,6 +58,17 @@ def apply_landmark(
         the subject's recorded event/censoring time. These are data
         inconsistencies (an observation of a graft after it failed) and are
         dropped rather than silently kept.
+    additional_duration_cols : OTHER duration columns on the same time axis
+        (e.g. PatientSurvivalDays when landmarking on GraftSurvivalDays). These
+        are rebased alongside `duration_col`, and a subject must be at risk on
+        ALL of them at the landmark to be retained.
+
+        This matters for competing risks: rebasing only `duration_col` leaves
+        the other duration still measured from time zero, so it is inflated by
+        `landmark_day` relative to the one that moved. Any downstream
+        min(t_graft, t_death) then always picks the rebased column, and events
+        recorded in the untouched one are silently reclassified as censored --
+        which quietly empties an entire competing cause.
 
     Returns
     -------
@@ -70,15 +82,24 @@ def apply_landmark(
             f"got columns: {list(static_df.columns)}"
         )
 
+    additional_duration_cols = [
+        c for c in (additional_duration_cols or []) if c in static_df.columns and c != duration_col
+    ]
+    rebase_cols = [duration_col] + additional_duration_cols
+    report["rebased_columns"] = rebase_cols
+
     static = static_df.copy()
     durations = static[duration_col].to_numpy(dtype=float)
     events = static[event_col].to_numpy()
     events = np.asarray(events).astype(bool)
 
     # 1. Cohort: only subjects still under observation and event-free at the
-    #    landmark. A subject whose event or censoring happened at or before L
-    #    contributes no post-landmark outcome to predict.
+    #    landmark, on EVERY duration column -- a subject who died before the
+    #    landmark is not at risk for graft loss after it, even if the graft
+    #    column alone suggests otherwise.
     at_risk_at_landmark = durations > landmark_day
+    for c in additional_duration_cols:
+        at_risk_at_landmark &= static[c].to_numpy(dtype=float) > landmark_day
     n_dropped_early = int((~at_risk_at_landmark).sum())
     n_dropped_early_events = int((~at_risk_at_landmark & events).sum())
 
@@ -116,9 +137,11 @@ def apply_landmark(
         report[f"{name}_rows_after"] = len(sub)
         report[f"{name}_subjects_with_data"] = int(sub[id_col].nunique())
 
-    # 3. Re-base durations to measure time from the landmark forward
+    # 3. Re-base every duration to measure time from the landmark forward.
+    #    All of them, not just duration_col -- see additional_duration_cols.
     if rebase_durations:
-        static[duration_col] = static[duration_col] - landmark_day
+        for c in rebase_cols:
+            static[c] = static[c] - landmark_day
         report["durations_rebased_to_landmark"] = True
 
     n_events_after = int(np.asarray(static[event_col].to_numpy()).astype(bool).sum())
@@ -141,6 +164,7 @@ def apply_landmark(
                   f"{report[f'{name}_rows_after']:,} rows{extra}")
         print(f"    post-landmark event rate: {report['event_rate_after_landmark']:.3f} "
               f"({n_events_after:,} events)")
+        print(f"    rebased duration columns: {', '.join(rebase_cols)}")
 
     return static, temporal_out, report
 
