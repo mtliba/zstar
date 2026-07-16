@@ -39,6 +39,21 @@ class EGFRTrajectoryPredictor(nn.Module):
         return self.net(z)  # [B, n_points]
 
 
+def make_split(n: int, val_split: float = 0.2, seed: int = 42):
+    """
+    Deterministic train/val index split.
+
+    Seeded and shared, so every head trained on the same z-star is evaluated on
+    the *same* held-out subjects. Without this, comparing a linear probe against
+    an MLP compares them on different data, and re-running silently changes the
+    numbers.
+    """
+    g = torch.Generator().manual_seed(seed)
+    perm = torch.randperm(n, generator=g)
+    n_val = max(1, int(n * val_split))
+    return perm[n_val:], perm[:n_val]
+
+
 def train_downstream_head(
     head: nn.Module,
     zstar: np.ndarray,
@@ -48,6 +63,7 @@ def train_downstream_head(
     lr: float = 1e-3,
     val_split: float = 0.2,
     batch_size: int = 64,
+    seed: int = 42,
 ) -> Dict[str, float]:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     head = head.to(device)
@@ -56,9 +72,7 @@ def train_downstream_head(
     y_tensor = torch.tensor(labels, dtype=torch.float32)
 
     n = len(z_tensor)
-    n_val = max(1, int(n * val_split))
-    perm = torch.randperm(n)
-    train_idx, val_idx = perm[n_val:], perm[:n_val]
+    train_idx, val_idx = make_split(n, val_split=val_split, seed=seed)
 
     train_ds = TensorDataset(z_tensor[train_idx], y_tensor[train_idx])
     val_ds = TensorDataset(z_tensor[val_idx], y_tensor[val_idx])

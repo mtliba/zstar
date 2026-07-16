@@ -171,7 +171,39 @@ The `*Days` column is the **observed duration**; the `*WithinStudyPeriod` flag i
 **censoring mask** — `True` means the event was observed at that duration, `False` means
 observation *stopped* there with the event not yet observed.
 
-### Two traps this creates
+### Graft loss and death are competing risks
+
+A patient who dies with a functioning graft can **never** subsequently experience graft
+failure. Treating death as ordinary censoring for the graft outcome breaks the
+independent-censoring assumption Kaplan-Meier relies on, and **1−KM then overestimates
+graft-loss incidence** — it implicitly credits dead patients with the chance of failing later.
+
+The correct estimator is the **Aalen-Johansen cumulative incidence function** (`aalen_johansen`),
+not 1−KM. `plot_cumulative_incidence(..., compare_with_km=True)` overlays both so the bias is
+visible directly. `derive_competing_events(labels_df)` collapses the two (duration, mask) pairs
+into a single competing-risks encoding: `0 = censored, 1 = graft loss first, 2 = death first`.
+
+### Modelling: discrete-time competing-risks network (no PH assumption)
+
+`train_competing_risks_head(zstar, time, cause)` fits a neural network that predicts, for each
+time bin, a distribution over `{no event, graft loss, death}`.
+
+- **No proportional-hazards assumption.** Cox constrains every subject's hazard to a fixed
+  multiple of a shared baseline for all time — subjects can never cross, and a covariate's
+  effect cannot change with time. Here each (bin, cause) has its own output, so hazard shape is
+  free to vary per subject and a covariate may matter early but not late.
+- **Competing-risks-correct by construction.** The causes share one softmax per bin, so they
+  compete for probability mass; dying in a bin removes a subject from ever accruing graft-loss
+  incidence afterwards. CIFs plus the event-free probability sum to exactly 1 — the property
+  per-cause 1−KM violates.
+- **Censoring handled in the likelihood**, not by relabelling: a subject censored in bin *t*
+  contributes "survived" terms for bins `0..t-1` and nothing at *t*. They are never scored as a
+  non-event, and their censoring time is never treated as an event time.
+
+Verified: recovers a known per-cause signal (C-index ≈ 0.66 for each of two independently
+generated causes) and returns to chance on shuffled labels.
+
+### Two more traps
 
 **1. Binary classification on the mask is statistically wrong.** It treats "censored at day 90"
 and "event-free through day 4000" as identical negatives. The `GraftLossPredictor` heads in

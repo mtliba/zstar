@@ -25,3 +25,26 @@ from .survival import (
     plot_km_by_zstar_risk,
     plot_landmark_diagnostic,
 )
+from .competing_risks import (
+    CAUSE_CENSORED,
+    CAUSE_GRAFT_LOSS,
+    CAUSE_DEATH,
+    CAUSE_NAMES,
+    derive_competing_events,
+    aalen_johansen,
+    cause_specific_concordance,
+    plot_cumulative_incidence,
+    plot_stacked_incidence,
+    plot_cif_by_group,
+    plot_competing_risks_overview,
+    plot_head_training_dynamics,
+    plot_cif_calibration,
+)
+from .discrete_survival import (
+    DiscreteTimeCompetingRisksHead,
+    discrete_time_competing_risks_loss,
+    predict_cif,
+    train_competing_risks_head,
+    make_time_bins,
+    discretize,
+)

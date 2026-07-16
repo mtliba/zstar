@@ -56,6 +56,14 @@ from zstar.evaluation import (
     plot_followup_distribution,
     plot_km_by_zstar_risk,
     plot_landmark_diagnostic,
+    derive_competing_events,
+    plot_competing_risks_overview,
+    plot_cumulative_incidence,
+    plot_cif_by_group,
+    plot_head_training_dynamics,
+    plot_cif_calibration,
+    train_competing_risks_head,
+    CAUSE_NAMES,
 )
 from zstar.evaluation.downstream import GraftLossPredictor, train_downstream_head
 
@@ -171,6 +179,8 @@ def run(
     batch_size: int = 32,
     seed: int = 7,
     progress: bool = True,
+    cr_epochs: int = 200,
+    cr_bins: int = 20,
 ):
     if label_col not in LABEL_COLS:
         raise ValueError(f"label_col must be one of {LABEL_COLS}, got '{label_col}'")
@@ -230,8 +240,17 @@ def run(
     data_dict, ids, feature_columns = build_from_tables(tables, id_col=ID_COL)
     labels_df = popf_df.set_index(ID_COL).reindex(ids)[LABEL_COLS]
 
-    print("\n1d. Survival outcome overview")
-    plot_survival_overview(labels_df, save_path=os.path.join(plots_dir, "survival_overview.png"))
+    print("\n1d. Outcome overview (competing risks: graft loss vs. death)")
+    cr_time, cr_cause, cr_report = derive_competing_events(labels_df)
+    plot_competing_risks_overview(
+        cr_time, cr_cause, cr_report,
+        save_path=os.path.join(plots_dir, "competing_risks_overview.png"),
+    )
+    plot_cumulative_incidence(
+        cr_time, cr_cause, compare_with_km=True,
+        save_path=os.path.join(plots_dir, "cumulative_incidence.png"),
+    )
+    plot_survival_overview(labels_df, save_path=os.path.join(plots_dir, "survival_overview_km.png"))
     plot_followup_distribution(labels_df, save_path=os.path.join(plots_dir, "followup_distribution.png"))
 
     print("\n2. Building dataset")
@@ -281,8 +300,8 @@ def run(
 
     head_linear = GraftLossPredictor(latent_dim=latent_dim, hidden_dims=[])
     head_mlp = GraftLossPredictor(latent_dim=latent_dim, hidden_dims=[32, 16])
-    results_linear = train_downstream_head(head_linear, zstar_embeddings, y, task=task, epochs=50)
-    results_mlp = train_downstream_head(head_mlp, zstar_embeddings, y, task=task, epochs=50)
+    results_linear = train_downstream_head(head_linear, zstar_embeddings, y, task=task, epochs=50, seed=seed)
+    results_mlp = train_downstream_head(head_mlp, zstar_embeddings, y, task=task, epochs=50, seed=seed)
     print(f"  linear probe: {results_linear}")
     print(f"  mlp:          {results_mlp}")
 
@@ -292,10 +311,60 @@ def run(
         print("         identical to one observed event-free for years. The C-index below")
         print("         is the censoring-aware metric and should be preferred over AUROC.")
 
-    print("\n7b. Survival-aware evaluation")
-    durations = labels_df[duration_col].to_numpy(dtype=float)
-    events = np.asarray(labels_df[event_col].to_numpy()).astype(bool)
+    print("\n7b. Competing-risks model (discrete-time neural hazards, both outcomes)")
+    print("     Predicts graft loss and death jointly as competing events.")
+    print("     No proportional-hazards assumption: each (time bin, cause) has its")
+    print("     own hazard output, so effects may vary freely over time.")
+    cr = train_competing_risks_head(
+        zstar_embeddings, cr_time, cr_cause,
+        n_bins=cr_bins, epochs=cr_epochs, seed=seed, verbose=True,
+    )
+    va = cr["val_idx"]
 
+    print("\n  Held-out C-index (val split only):")
+    for cause_id, cause_name in CAUSE_NAMES.items():
+        cv = cr[f"c_index_val_cause{cause_id}"]
+        ct = cr[f"c_index_train_cause{cause_id}"]
+        print(f"    {cause_name:<12}: val={cv:.4f}  train={ct:.4f}   (0.5 = chance)")
+
+    # Training dynamics per outcome
+    plot_head_training_dynamics(
+        cr["history"],
+        save_path=os.path.join(plots_dir, "competing_risks_training_dynamics.png"),
+    )
+
+    # Per-cause: CIF stratified by predicted risk, and CIF calibration -- val only
+    for cause_id, cause_name in CAUSE_NAMES.items():
+        risk = cr[f"risk_cause{cause_id}"]
+        slug = cause_name.replace(" ", "_")
+
+        q = np.quantile(risk[va], [0.25, 0.5, 0.75])
+        groups_va = np.digitize(risk[va], q)
+        plot_cif_by_group(
+            cr_time[va], cr_cause[va], groups_va, cause=cause_id, cause_name=cause_name,
+            group_names={0: "Q1 (lowest risk)", 1: "Q2", 2: "Q3", 3: "Q4 (highest risk)"},
+            title=f"{cause_name}: cumulative incidence by predicted risk quartile (held-out)",
+            save_path=os.path.join(plots_dir, f"cif_by_predicted_risk_{slug}.png"),
+        )
+        plot_cif_calibration(
+            risk[va], cr_time[va], cr_cause[va], cause=cause_id, cause_name=cause_name,
+            save_path=os.path.join(plots_dir, f"cif_calibration_{slug}.png"),
+        )
+
+    # Unsupervised: does z-star separate risk without ever seeing a label?
+    from sklearn.cluster import KMeans
+    clusters = KMeans(n_clusters=4, random_state=42, n_init=10).fit_predict(zstar_embeddings)
+    for cause_id, cause_name in CAUSE_NAMES.items():
+        slug = cause_name.replace(" ", "_")
+        plot_cif_by_group(
+            cr_time, cr_cause, clusters, cause=cause_id, cause_name=cause_name,
+            title=f"{cause_name}: cumulative incidence by z-star cluster (unsupervised)",
+            save_path=os.path.join(plots_dir, f"cif_by_zstar_cluster_{slug}.png"),
+        )
+
+    c_index = cr["c_index_val_cause1"]  # graft loss, held-out
+
+    # Binary-head risk scores, for the legacy ROC/PR plots below (val split only)
     import torch as _torch
     head_mlp.eval()
     head_device = next(head_mlp.parameters()).device
@@ -304,27 +373,17 @@ def run(
         raw_out = head_mlp(z_input)
         scores = _torch.sigmoid(raw_out).cpu().numpy() if is_binary else raw_out.cpu().numpy()
 
-    # For a duration target, higher predicted survival = lower risk, so negate.
-    risk_scores = scores if is_binary else -scores
-    c_index = concordance_index(durations, events, risk_scores)
-    print(f"  C-index ({duration_col} / {event_col}): {c_index:.4f}   (0.5 = chance)")
-
-    plot_km_by_zstar_risk(
-        zstar_embeddings, durations, events, n_groups=4, method="kmeans",
-        title=f"{duration_col}: KM stratified by z-star clusters (unsupervised)",
-        save_path=os.path.join(plots_dir, "km_by_zstar_cluster.png"),
-    )
-    plot_km_by_zstar_risk(
-        zstar_embeddings, durations, events, n_groups=4, method="quantile",
-        risk_scores=risk_scores,
-        title=f"{duration_col}: KM stratified by predicted risk quartile",
-        save_path=os.path.join(plots_dir, "km_by_predicted_risk.png"),
-    )
-
     print("\n8. Generating plot report")
     downstream_plot_kwargs = None
     if is_binary:
-        downstream_plot_kwargs = {"y_true": y, "y_scores": scores, "title": label_col}
+        # val split only -- these heads were fitted on the rest
+        from zstar.evaluation.downstream import make_split
+        _, bin_val_idx = make_split(len(y), seed=seed)
+        bv = bin_val_idx.numpy()
+        downstream_plot_kwargs = {
+            "y_true": y[bv], "y_scores": scores[bv],
+            "title": f"{label_col} (held-out split)",
+        }
 
     generate_full_report(
         output_dir=plots_dir,
@@ -353,6 +412,10 @@ def run(
         "reconstruction": recon_metrics,
         "downstream": {"linear_probe": results_linear, "mlp": results_mlp},
         "c_index": c_index,
+        "competing_risks": {
+            k: cr[k] for k in cr
+            if k.startswith("c_index_") or k == "best_val_loss"
+        },
         "leakage_report": leak_report,
     }
 
@@ -388,6 +451,10 @@ def main():
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--cr-epochs", type=int, default=200,
+                        help="Epochs for the competing-risks head.")
+    parser.add_argument("--cr-bins", type=int, default=20,
+                        help="Time bins for the discrete-time competing-risks model.")
     parser.add_argument("--no-progress", action="store_true",
                         help="Disable tqdm progress bars (useful when logs are scraped).")
     args = parser.parse_args()
@@ -400,6 +467,7 @@ def main():
         include_missing_mask=not args.no_missing_mask,
         epochs=args.epochs, batch_size=args.batch_size, seed=args.seed,
         progress=not args.no_progress,
+        cr_epochs=args.cr_epochs, cr_bins=args.cr_bins,
     )
 
 
