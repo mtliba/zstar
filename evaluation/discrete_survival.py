@@ -28,9 +28,10 @@ reality requires. CIFs derived from these hazards therefore sum (with the
 event-free probability) to 1 -- the property that per-cause 1-KM violates.
 
 Censoring is handled in the likelihood, not by relabelling: a subject censored
-in bin t contributes "survived" terms for bins 0..t-1 and contributes nothing
-at bin t (we simply do not know what happened there). They are never scored as
-a non-event, and their censoring time is never treated as an event time.
+in bin t contributes "survived" (no-event) terms for bins 0..t and nothing
+after. They are never scored as having failed, and their censoring time is
+never treated as an event time. See `discrete_time_competing_risks_loss` for
+why the censored subject must be included at bin t itself.
 """
 
 from typing import Dict, List, Optional, Tuple
@@ -112,7 +113,19 @@ def discrete_time_competing_risks_loss(
     For subject i observed until bin t_i with cause k_i (0 = censored):
         bins s < t_i : -log P(no event at s)
         bin  t_i     : -log P(cause k_i at t_i)   if k_i > 0
-                       (nothing)                  if censored
+                       -log P(no event at t_i)    if censored
+
+    Note the censored branch at bin t_i. Excluding it (on the argument that we
+    cannot know what happened inside the interval where observation stopped)
+    looks more conservative but is badly wrong in practice: with heavy
+    censoring at long follow-up, almost every censored subject lands in the
+    FINAL bin, so that bin ends up supervised only by the handful of subjects
+    who had an event there. The model then learns hazard ~= 1 in the last bin,
+    every subject's CIF is pinned near 1.0, and the only remaining variation is
+    the probability of *surviving* to that bin -- which inverts the risk score
+    and drives C-index below 0.5. Including the censored subject as "no event"
+    at t_i is the standard discrete-time (person-period) convention and avoids
+    this.
 
     logits    : [B, K, C+1]
     time_bin  : [B] long, the bin in which observation ended
@@ -122,13 +135,20 @@ def discrete_time_competing_risks_loss(
     log_p = F.log_softmax(logits, dim=-1)
 
     arange = torch.arange(K, device=logits.device)
-    survived_mask = (arange[None, :] < time_bin[:, None]).float()   # [B, K]
+    t_clamped = time_bin.clamp(max=K - 1)
+    survived_mask = (arange[None, :] < t_clamped[:, None]).float()   # [B, K]
+
+    # Censored subjects also contribute "no event" at their final bin
+    censored = cause == 0
+    if censored.any():
+        survived_mask[censored, t_clamped[censored]] = 1.0
+
     loss_survive = -(log_p[:, :, 0] * survived_mask).sum()
 
     has_event = cause > 0
     if has_event.any():
         idx = torch.nonzero(has_event, as_tuple=True)[0]
-        t_e = time_bin[idx].clamp(max=K - 1)
+        t_e = t_clamped[idx]
         k_e = cause[idx]
         loss_event = -log_p[idx, t_e, k_e].sum()
     else:
