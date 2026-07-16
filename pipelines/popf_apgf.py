@@ -118,6 +118,9 @@ def build_config(
     apgf_encoder: str,
     seed: int,
     progress: bool = True,
+    temporal_prediction: bool = False,
+    tp_horizon: int = 3,
+    tp_weight: float = 0.3,
 ):
     return OmegaConf.create({
         "project": {"name": "popf_apgf", "seed": seed},
@@ -150,7 +153,15 @@ def build_config(
             "vq_commitment": {"enabled": False, "weight": 0.25},
             "contrastive": {"enabled": True, "weight": 0.5, "temperature": 0.07},
             "masked_reconstruction": {"enabled": False, "weight": 0.3},
-            "temporal_prediction": {"enabled": False, "weight": 0.3, "prediction_horizon": 3, "modalities": []},
+            # Forecast the held-out tail of apgf from the truncated past. Closer
+            # to "predict deterioration" than reconstruction is: reconstruction
+            # rewards encoding whatever is easy to reproduce, which need not be
+            # what predicts the outcome.
+            "temporal_prediction": {
+                "enabled": temporal_prediction, "weight": tp_weight,
+                "prediction_horizon": tp_horizon,
+                "modalities": ["apgf"] if temporal_prediction else [],
+            },
             "alignment": {"enabled": True, "weight": 0.5, "strategy": "mmd", "temperature": 0.07},
         },
         "training": {
@@ -188,6 +199,9 @@ def run(
     compare_finetuning: bool = False,
     ft_epochs: int = 30,
     calib_horizons: tuple = (365, 1825),
+    temporal_prediction: bool = False,
+    tp_horizon: int = 3,
+    tp_weight: float = 0.3,
 ):
     if label_col not in LABEL_COLS:
         raise ValueError(f"label_col must be one of {LABEL_COLS}, got '{label_col}'")
@@ -271,6 +285,7 @@ def run(
         apgf_input_dim=info["apgf"]["n_features"],
         latent_dim=latent_dim, fusion=fusion, epochs=epochs, batch_size=batch_size,
         apgf_encoder=apgf_encoder, seed=seed, progress=progress,
+        temporal_prediction=temporal_prediction, tp_horizon=tp_horizon, tp_weight=tp_weight,
     )
 
     print("\n3. Building model")
@@ -499,6 +514,14 @@ def main():
                         help="Epochs for the competing-risks head.")
     parser.add_argument("--cr-bins", type=int, default=20,
                         help="Time bins for the discrete-time competing-risks model.")
+    parser.add_argument("--temporal-prediction", action="store_true",
+                        help="Add a forecasting pretext task: encode apgf truncated by "
+                             "--tp-horizon steps and predict the held-out tail. Closer to "
+                             "'predict deterioration' than reconstruction.")
+    parser.add_argument("--tp-horizon", type=int, default=3,
+                        help="Checkups to hold out and forecast (--temporal-prediction).")
+    parser.add_argument("--tp-weight", type=float, default=0.3,
+                        help="Loss weight for the forecasting objective.")
     parser.add_argument("--calib-horizons", default="365,1825",
                         help="Comma-separated horizons (days) for calibration. When a "
                              "landmark is applied, these are measured FROM the landmark.")
@@ -523,6 +546,8 @@ def main():
         cr_epochs=args.cr_epochs, cr_bins=args.cr_bins,
         compare_finetuning=args.compare_finetuning, ft_epochs=args.ft_epochs,
         calib_horizons=tuple(float(x) for x in args.calib_horizons.split(',')),
+        temporal_prediction=args.temporal_prediction,
+        tp_horizon=args.tp_horizon, tp_weight=args.tp_weight,
     )
 
 

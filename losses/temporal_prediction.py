@@ -1,20 +1,35 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict
+from typing import Dict, Optional
 
 
 def temporal_prediction_loss(
     predictions: Dict[str, torch.Tensor],
     targets: Dict[str, torch.Tensor],
+    valid: Optional[Dict[str, torch.Tensor]] = None,
 ) -> torch.Tensor:
+    """
+    MSE between forecast and the held-out future.
+
+    `valid` marks subjects whose sequence was long enough to supply both a past
+    to encode and a full horizon to predict. Subjects without one contribute a
+    target gathered from clamped indices, which would be meaningless
+    supervision -- they are excluded rather than fitted.
+    """
     total = torch.tensor(0.0)
     count = 0
     for name in predictions:
-        pred = predictions[name]
-        tgt = targets[name]
+        pred, tgt = predictions[name], targets[name]
         if total.device != pred.device:
             total = total.to(pred.device)
+
+        if valid is not None and name in valid:
+            m = valid[name]
+            if not bool(m.any()):
+                continue
+            pred, tgt = pred[m], tgt[m]
+
         total = total + F.mse_loss(pred, tgt)
         count += 1
     return total / max(count, 1)

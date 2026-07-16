@@ -203,6 +203,29 @@ time bin, a distribution over `{no event, graft loss, death}`.
 Verified: recovers a known per-cause signal (C-index ≈ 0.66 for each of two independently
 generated causes) and returns to chance on shuffled labels.
 
+### Aligning the pretext task: forecasting instead of reconstruction
+
+Reconstruction rewards the encoder for encoding whatever is *easy to reproduce* — height, weight,
+serology — which need not be what predicts graft loss. That misalignment is the likeliest reason
+a from-scratch encoder can match or beat frozen z-star. Forecasting is closer to the real
+question:
+
+```bash
+zstar-popf-apgf ... --temporal-prediction --tp-horizon 3 --tp-weight 0.3
+```
+
+Each subject's `apgf` sequence is cut `--tp-horizon` checkups short, **only the past is encoded**,
+and a GRU head must predict the held-out tail from that latent.
+
+**The truncation is the whole objective.** Encoding the full sequence and then "predicting" its
+last steps is a copy task — the encoder has already seen the answer — and applies no pressure to
+extrapolate. This is verified rather than assumed: perturbing only the held-out future leaves the
+past-encoding bit-identical (max |Δz| = 0.0), while the same perturbation moves a full-sequence
+encoding by 0.198.
+
+Subjects whose sequence is shorter than the horizon cannot supply both a past and a future; they
+are excluded via a validity mask rather than fitted against clamped indices.
+
 ### Calibration: evaluate at fixed horizons, not end-of-follow-up
 
 Discrimination (C-index) and calibration are separate properties — a model can rank patients

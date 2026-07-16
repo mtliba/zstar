@@ -74,6 +74,7 @@ def compute_total_loss(
     if "temporal_prediction" in active and outputs.get("temporal_preds"):
         losses["temporal_pred"] = cfg.objectives.temporal_prediction.weight * temporal_prediction_loss(
             outputs["temporal_preds"], outputs["temporal_targets"],
+            outputs.get("temporal_valid"),
         )
 
     total = sum(losses.values())
