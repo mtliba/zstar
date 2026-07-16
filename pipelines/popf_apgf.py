@@ -63,6 +63,8 @@ from zstar.evaluation import (
     plot_head_training_dynamics,
     plot_cif_calibration,
     plot_finetuning_comparison,
+    plot_cif_calibration_at_horizons,
+    recalibrate_and_report,
     train_competing_risks_head,
     compare_finetuning_strategies,
     CAUSE_NAMES,
@@ -185,6 +187,7 @@ def run(
     cr_bins: int = 20,
     compare_finetuning: bool = False,
     ft_epochs: int = 30,
+    calib_horizons: tuple = (365, 1825),
 ):
     if label_col not in LABEL_COLS:
         raise ValueError(f"label_col must be one of {LABEL_COLS}, got '{label_col}'")
@@ -350,8 +353,18 @@ def run(
             title=f"{cause_name}: cumulative incidence by predicted risk quartile (held-out)",
             save_path=os.path.join(plots_dir, f"cif_by_predicted_risk_{slug}.png"),
         )
-        plot_cif_calibration(
-            risk[va], cr_time[va], cr_cause[va], cause=cause_id, cause_name=cause_name,
+        # Calibration at FIXED horizons, not end-of-follow-up: in the far tail
+        # almost nobody is still at risk, so the Aalen-Johansen reference there
+        # is unstable and would make the model look miscalibrated regardless.
+        print(f"\n  Recalibration ({cause_name}), fit on train / evaluated on val:")
+        recal = recalibrate_and_report(
+            cr["cif"], cr["cuts"], cr_time, cr_cause, cause_id,
+            cr["train_idx"], cr["val_idx"], horizons=calib_horizons,
+        )
+        plot_cif_calibration_at_horizons(
+            cr["cif"][va], cr["cuts"], cr_time[va], cr_cause[va], cause=cause_id,
+            horizons=calib_horizons, cause_name=cause_name,
+            recalibrated={h: r["recalibrated_val"] for h, r in recal.items()},
             save_path=os.path.join(plots_dir, f"cif_calibration_{slug}.png"),
         )
 
@@ -486,6 +499,9 @@ def main():
                         help="Epochs for the competing-risks head.")
     parser.add_argument("--cr-bins", type=int, default=20,
                         help="Time bins for the discrete-time competing-risks model.")
+    parser.add_argument("--calib-horizons", default="365,1825",
+                        help="Comma-separated horizons (days) for calibration. When a "
+                             "landmark is applied, these are measured FROM the landmark.")
     parser.add_argument("--compare-finetuning", action="store_true",
                         help="Also train fine-tuned and from-scratch encoders and compare "
                              "against frozen z-star. ~3x the cost; the from-scratch arm is "
@@ -506,6 +522,7 @@ def main():
         progress=not args.no_progress,
         cr_epochs=args.cr_epochs, cr_bins=args.cr_bins,
         compare_finetuning=args.compare_finetuning, ft_epochs=args.ft_epochs,
+        calib_horizons=tuple(float(x) for x in args.calib_horizons.split(',')),
     )
 
 

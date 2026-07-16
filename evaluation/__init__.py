@@ -53,3 +53,11 @@ from .finetune import (
     train_end_to_end,
     compare_finetuning_strategies,
 )
+from .calibration import (
+    cif_at_horizon,
+    ipcw_binary_outcome,
+    CIFRecalibrator,
+    calibration_curve_at_horizon,
+    plot_cif_calibration_at_horizons,
+    recalibrate_and_report,
+)

@@ -203,6 +203,44 @@ time bin, a distribution over `{no event, graft loss, death}`.
 Verified: recovers a known per-cause signal (C-index ≈ 0.66 for each of two independently
 generated causes) and returns to chance on shuffled labels.
 
+### Calibration: evaluate at fixed horizons, not end-of-follow-up
+
+Discrimination (C-index) and calibration are separate properties — a model can rank patients
+correctly while its absolute probabilities are badly wrong.
+
+Calibration must be checked at a **fixed horizon** (`--calib-horizons 365,1825`), not at the end
+of follow-up. In the far tail almost nobody is still at risk, so the Aalen-Johansen reference
+there is unstable and drifts upward — the model looks miscalibrated regardless of whether it is.
+Each panel reports the number still at risk and warns when a horizon is too thin to trust.
+
+**Recalibration needs IPCW, not label-dropping.** Isotonic regression needs a per-subject binary
+outcome, but censoring means you don't have one for everyone. At horizon τ:
+
+| Status | Target |
+|---|---|
+| `T ≤ τ`, cause = k | 1 |
+| `T ≤ τ`, competing cause | 0 — can *never* have cause k (subdistribution convention) |
+| `T > τ` | 0 |
+| `T ≤ τ`, censored | **unknown** |
+
+Dropping the unknowns biases the fit — subjects censored early are not a random subset. Verified:
+on simulated data where the truth is known, IPCW recovers CIF@τ to within **0.0001** while naive
+label-dropping is off by **0.0924** (23% relative). Each usable subject is instead weighted by the
+inverse probability of remaining uncensored, from a reverse Kaplan-Meier.
+
+```python
+from zstar.evaluation import recalibrate_and_report, plot_cif_calibration_at_horizons
+
+recal = recalibrate_and_report(cr["cif"], cr["cuts"], time, cause, cause_id,
+                               cr["train_idx"], cr["val_idx"], horizons=(365, 1825))
+# {365: {"ici_before": .., "ici_after": .., "recalibrated_val": ..}, ...}
+```
+
+Fit on train, applied to val — fitting and evaluating on the same subjects would just report the
+recalibrator's own fit back. Isotonic is monotone, so it rescales probabilities without
+reordering patients: **discrimination is unchanged** (verified: C-index moves <0.005), only
+calibration improves.
+
 ### Frozen vs. fine-tuned vs. from-scratch
 
 By default z-star is used **frozen** — a head is trained on fixed embeddings. That is cheap, but
