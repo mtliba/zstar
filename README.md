@@ -141,7 +141,7 @@ For the REXETRIS baseline (`popf_v3`) and checkup (`apgf`) tables specifically, 
 pipeline ships as a console command:
 
 ```bash
-pip install transplant-zstar
+pip install transplant-zstar1
 zstar-popf-apgf --popf popf_v3.csv --apgf apgf.csv --output-dir results/
 ```
 
