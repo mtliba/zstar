@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "transplant-zstar"
-version = "0.2.0"
+version = "0.2.1"
 description = "Self-supervised, multimodal representation learning framework for kidney transplant patient data"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -33,11 +33,19 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Medical Science Apps.",
 ]
 dependencies = [
-    "torch>=2.3.0",
+    # torch has no minimum floor here: PyTorch stopped publishing Intel-macOS
+    # wheels after 2.2.2, so a floor above that would make this uninstallable
+    # for any Intel Mac / Rosetta-translated Python. numpy is capped below 2.0
+    # instead: numpy 1.x is ABI-compatible with every torch release from 2.0.0
+    # onward, whereas numpy 2.x crashes on `import torch` for pre-2.3 torch
+    # builds -- capping numpy is what actually guarantees a working install
+    # across old and new torch alike, since pip can't resolve on that ABI
+    # relationship itself.
+    "torch>=2.0.0",
     "omegaconf>=2.3.0",
-    "numpy>=1.24.0",
+    "numpy>=1.24.0,<2.0",
     "pandas>=1.5.0",
-    "scikit-learn>=1.3.0",
+    "scikit-learn>=1.3.0,<1.6",
     "matplotlib>=3.7.0",
 ]
 
