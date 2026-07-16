@@ -64,8 +64,9 @@ BOOL_COLS_POPF = [
     "sex", "sex_donor", "donor_living", "cmv", "ebv", "cmv_donor_2l",
     "ebv_donor_2l", "crossmatch_2l", "cirrhosis_regist", "diabetes_regist",
     "dyslipidemia_regist", "history_hbp_regist", "neuropath_regist",
-    "uro_patho_regist", "smoking_ever_regist", "diabetes_donor", "hbp_donor",
-    "kidney_disease_donor", "kidney_machine", "functionnal_discharge_hosp",
+    "uro_patho_regist", "smoking_ever_regist", "cvd_regist", "diabetes_donor",
+    "hbp_donor", "kidney_disease_donor", "kidney_machine",
+    "functionnal_discharge_hosp",
 ]
 BOOL_COLS_APGF = [
     "proteinuria_imputed", "dsa_dn", "cancer", "lymphoma", "hla", "bkv",
