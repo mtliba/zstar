@@ -105,6 +105,7 @@ def build_config(
     batch_size: int,
     apgf_encoder: str,
     seed: int,
+    progress: bool = True,
 ):
     return OmegaConf.create({
         "project": {"name": "popf_apgf", "seed": seed},
@@ -147,7 +148,11 @@ def build_config(
             "scheduler": {"type": "reduce_on_plateau", "patience": 8, "factor": 0.5},
         },
         "data": {"path": "data/", "normalize": True},
-        "logging": {"log_every": max(1, epochs // 10), "save_dir": "checkpoints/"},
+        "logging": {
+            "log_every": max(1, epochs // 10),
+            "save_dir": "checkpoints/",
+            "progress": progress,
+        },
     })
 
 
@@ -165,6 +170,7 @@ def run(
     epochs: int = 100,
     batch_size: int = 32,
     seed: int = 7,
+    progress: bool = True,
 ):
     if label_col not in LABEL_COLS:
         raise ValueError(f"label_col must be one of {LABEL_COLS}, got '{label_col}'")
@@ -238,7 +244,7 @@ def run(
         popf_input_dim=info["popf"]["n_features"],
         apgf_input_dim=info["apgf"]["n_features"],
         latent_dim=latent_dim, fusion=fusion, epochs=epochs, batch_size=batch_size,
-        apgf_encoder=apgf_encoder, seed=seed,
+        apgf_encoder=apgf_encoder, seed=seed, progress=progress,
     )
 
     print("\n3. Building model")
@@ -382,6 +388,8 @@ def main():
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--no-progress", action="store_true",
+                        help="Disable tqdm progress bars (useful when logs are scraped).")
     args = parser.parse_args()
 
     run(
@@ -391,6 +399,7 @@ def main():
         apgf_encoder=args.apgf_encoder, imputation=args.imputation,
         include_missing_mask=not args.no_missing_mask,
         epochs=args.epochs, batch_size=args.batch_size, seed=args.seed,
+        progress=not args.no_progress,
     )
 
 

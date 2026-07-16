@@ -8,6 +8,7 @@ from zstar.models.zstar_model import ZStarModel
 from zstar.data.collate import zstar_collate
 from zstar.losses import compute_total_loss
 from .schedulers import get_kl_beta
+from .progress import progress_bar, tqdm_write, TQDM_AVAILABLE
 
 
 class ZStarTrainer:
@@ -15,6 +16,8 @@ class ZStarTrainer:
     def __init__(self, model: ZStarModel, dataset, cfg: DictConfig):
         self.model = model
         self.cfg = cfg
+        # logging.progress: set false to silence bars (e.g. in a log-scraped job)
+        self.show_progress = bool(cfg.get("logging", {}).get("progress", True))
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
 
@@ -99,14 +102,31 @@ class ZStarTrainer:
         outputs = self.model(batch)
         return compute_total_loss(batch, outputs, self.cfg, beta=beta, stage_name=stage_name)
 
-    def _epoch(self, loader, beta: float, train: bool, stage_name: Optional[str]) -> Dict[str, float]:
+    def _epoch(
+        self,
+        loader,
+        beta: float,
+        train: bool,
+        stage_name: Optional[str],
+        epoch: Optional[int] = None,
+    ) -> Dict[str, float]:
         self.model.train(train)
         totals = {}
         n = 0
 
+        desc = f"  epoch {epoch} {'train' if train else 'val':<5}" if epoch else None
+        bar = progress_bar(
+            loader,
+            enabled=self.show_progress,
+            desc=desc,
+            leave=False,          # batch bars disappear once the epoch is done
+            unit="batch",
+            dynamic_ncols=True,
+        )
+
         ctx = torch.enable_grad() if train else torch.no_grad()
         with ctx:
-            for batch in loader:
+            for batch in bar:
                 losses = self._run_batch(batch, beta, stage_name)
                 if train:
                     self.optimizer.zero_grad()
@@ -120,6 +140,8 @@ class ZStarTrainer:
                     totals[k] = totals.get(k, 0.0) + v.item() * bs
                 n += bs
 
+                bar.set_postfix(loss=f"{losses['total'].item():.4f}")
+
         return {k: v / n for k, v in totals.items()}
 
     def train(self) -> Dict[str, List[dict]]:
@@ -130,14 +152,27 @@ class ZStarTrainer:
         print(f"Device : {self.device}")
         print(f"Epochs : {epochs}")
         print(f"Train  : {len(self.train_loader.dataset)} samples")
-        print(f"Val    : {len(self.val_loader.dataset)} samples\n")
+        print(f"Val    : {len(self.val_loader.dataset)} samples")
+        if self.show_progress and not TQDM_AVAILABLE:
+            print("Note   : install tqdm for progress bars (pip install tqdm)")
+        print()
 
-        for epoch in range(1, epochs + 1):
+        epoch_bar = progress_bar(
+            range(1, epochs + 1),
+            enabled=self.show_progress,
+            desc="Training",
+            unit="epoch",
+            dynamic_ncols=True,
+        )
+
+        for epoch in epoch_bar:
             beta = get_kl_beta(epoch, self.cfg)
             stage_name = self._get_stage(epoch)
 
-            train_m = self._epoch(self.train_loader, beta, train=True, stage_name=stage_name)
-            val_m = self._epoch(self.val_loader, beta, train=False, stage_name=stage_name)
+            train_m = self._epoch(self.train_loader, beta, train=True,
+                                  stage_name=stage_name, epoch=epoch)
+            val_m = self._epoch(self.val_loader, beta, train=False,
+                                stage_name=stage_name, epoch=epoch)
 
             self.history["train"].append(train_m)
             self.history["val"].append(val_m)
@@ -147,14 +182,27 @@ class ZStarTrainer:
             else:
                 self.scheduler.step()
 
+            # Live loss + ETA on the epoch bar itself
+            epoch_bar.set_postfix(
+                train=f"{train_m['total']:.4f}",
+                val=f"{val_m['total']:.4f}",
+                beta=f"{beta:.2f}",
+                best=f"{min(self.best_val_loss, val_m['total']):.4f}",
+            )
+
             if epoch % log_every == 0 or epoch == 1:
                 stage_str = f" [{stage_name}]" if stage_name else ""
                 loss_parts = " ".join(f"{k}={v:.4f}" for k, v in train_m.items() if k != "total")
-                print(
+                msg = (
                     f"[{epoch:4d}/{epochs}]{stage_str} β={beta:.2f} | "
                     f"train total={train_m['total']:.4f} {loss_parts} | "
                     f"val total={val_m['total']:.4f}"
                 )
+                # tqdm.write keeps log lines from corrupting the live bar
+                if self.show_progress and TQDM_AVAILABLE:
+                    tqdm_write(msg)
+                else:
+                    print(msg)
 
             if val_m["total"] < self.best_val_loss:
                 self.best_val_loss = val_m["total"]
