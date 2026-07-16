@@ -15,6 +15,7 @@ and missing-modality imputation.
 - [Status & scope](#status--scope)
 - [Installation](#installation)
 - [Quickstart](#quickstart)
+- [Plotting & reporting](#plotting--reporting)
 - [Architecture](#architecture)
 - [Modality types](#modality-types)
 - [Dataset & collation](#dataset--collation)
@@ -134,6 +135,60 @@ def load_real_data(cfg) -> dict:
 Each `modalities.<name>.input_dim` in `config.yaml` must be updated to match the actual feature
 count of your real data before running.
 
+### Real-data pipeline: popf_v3 + apgf, in two commands
+
+For the REXETRIS baseline (`popf_v3`) and checkup (`apgf`) tables specifically, a ready-made
+pipeline ships as a console command:
+
+```bash
+pip install transplant-zstar
+zstar-popf-apgf --popf popf_v3.csv --apgf apgf.csv --output-dir results/
+```
+
+This joins the two tables by `natt1`, applies the known column schema (boolean encoding,
+log-transforms on the right-skewed columns, label-column exclusion), builds the dataset with
+per-feature missing-mask concatenation and iterative imputation on `popf`, trains a PoE-fusion
+model, extracts z-star, runs cross-modal reconstruction and a downstream graft-loss head, and
+writes a full plot report — all into `results/`. See `zstar/pipelines/popf_apgf.py` for the
+exact column lists and `--help` for every CLI flag (fusion strategy, encoder choice, imputation
+mode, label column, epochs, etc.). Runnable from Python directly as
+`from zstar.pipelines.popf_apgf import run`.
+
+---
+
+## Plotting & reporting
+
+`zstar.evaluation.plots` covers the visuals most useful for explaining the pipeline and judging
+a run, beyond the latent-space tools in [Latent space analysis](#latent-space-analysis):
+
+| Function | Purpose |
+|---|---|
+| `plot_training_curves(history)` | One panel per loss component (total, recon, kl, contrastive, ...), train vs. val |
+| `plot_embedding_pipeline_diagram(...)` | Schematic of the actual encoders → fusion → z* pipeline used, for explaining the method |
+| `plot_latent_variance(zstar_embeddings)` | PCA scree plot: how concentrated the latent space's variance is |
+| `plot_reconstruction_scatter(y_true, y_pred)` | True vs. reconstructed/imputed values, R² annotated |
+| `plot_roc_pr_curves(y_true, y_scores)` | ROC + precision-recall side by side, AUROC/AUPRC annotated |
+| `plot_calibration_curve(y_true, y_scores)` | Reliability diagram: predicted probability vs. observed frequency |
+| `plot_confusion_matrix(y_true, y_pred_binary)` | Standard 2×2 confusion matrix |
+| `plot_downstream_comparison(results)` | Grouped bar chart comparing multiple downstream approaches |
+| `plot_missingness(df)` | Per-column missing-rate bar chart for a raw table, before building the dataset |
+| `generate_full_report(output_dir, ...)` | Runs every plot for which you supply inputs; skips the rest |
+
+```python
+from zstar.evaluation import generate_full_report
+
+generate_full_report(
+    output_dir="results/plots",
+    history=history,                                   # from ZStarTrainer.train()
+    modality_names=["popf", "apgf"],
+    modality_types={"popf": "static", "apgf": "temporal"},
+    fusion="poe", latent_dim=32,
+    zstar_embeddings=zstar_embeddings,
+    downstream={"y_true": y, "y_scores": scores, "title": "Graft loss"},
+    raw_tables={"popf_v3": popf_df, "apgf": apgf_df},
+)
+```
+
 ---
 
 ## Architecture
@@ -251,6 +306,48 @@ Exact shape produced per sample by `zstar_collate`:
 
 `T_max` is the maximum sequence length within that specific batch, not a global constant — it
 varies from batch to batch.
+
+### Per-modality options (beyond `type`/`data`)
+
+Each modality's spec dict accepts these optional keys:
+
+| Key | Applies to | Values | Effect |
+|---|---|---|---|
+| `normalize_mode` | static, temporal | `zscore` (default) \| `maxabs` \| `none` | `maxabs` conserves zero (no centering) — use for columns where 0 is a meaningful baseline (drug dose, event count), not just a scaling artifact |
+| `log_columns` | static, temporal | list of feature-column indices | Log-transforms right-skewed columns before normalization |
+| `include_missing_mask` | static only | `bool` | Concatenates a per-feature observed/missing indicator, doubling the width — use when a modality has real per-field missingness, not just whole-row absence |
+| `imputation` | static only | `zero` (default) \| `mean` \| `median` \| `iterative` | `iterative` runs scikit-learn's `IterativeImputer` (MICE-style: each missing value predicted from the other observed features in that row), more informative than a population mean when missingness correlates with other recorded fields |
+| `binary_columns` | static, `imputation="iterative"` only | list of feature-column indices | Clips those columns' imputed values to `[0,1]` — `IterativeImputer`'s regressor doesn't know a column is binary and can otherwise predict values outside that range |
+
+### Joining multiple raw tables: `build_from_tables`
+
+Real data rarely arrives as ready-made arrays — you have several tables sharing a patient/graft
+id column, with labels mixed in among the features. `zstar.data.build_from_tables` handles the
+join, boolean encoding, and label exclusion in one call:
+
+```python
+from zstar.data import build_from_tables
+
+tables = {
+    "popf": {
+        "df": popf_df, "type": "static", "bool_cols": [...],
+        "exclude_cols": ["FailureWithinStudyPeriod", ...],  # labels, not features
+        "log_columns": ["cit", "creat_donor"], "include_missing_mask": True,
+        "imputation": "iterative",
+    },
+    "apgf": {
+        "df": apgf_df, "type": "temporal", "timestamp_col": "days_since_tx",
+        "bool_cols": [...], "log_columns": ["creat", "proteinuria"],
+    },
+}
+data_dict, ids, feature_columns = build_from_tables(tables, id_col="natt1")
+dataset = ZStarDataset(data_dict, normalize=True)
+```
+
+An id absent from a given table becomes a fully missing sample for that modality (all-NaN
+static row / `None` temporal entry), rather than being dropped from the dataset. `bool_cols` is
+reused automatically as `binary_columns` for iterative imputation, so declaring it once covers
+both concerns.
 
 ---
 
