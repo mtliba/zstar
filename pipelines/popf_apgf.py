@@ -38,18 +38,24 @@ pipeline prints as evidence of real predictive performance.
 
 import argparse
 import os
+from typing import Optional
 
 import numpy as np
 import pandas as pd
 from omegaconf import OmegaConf
 
-from zstar.data import build_from_tables, ZStarDataset
+from zstar.data import build_from_tables, ZStarDataset, apply_landmark
 from zstar.models import ZStarModel
 from zstar.training import ZStarTrainer
 from zstar.evaluation import (
     extract_zstar,
     cross_modal_reconstruction,
     generate_full_report,
+    concordance_index,
+    plot_survival_overview,
+    plot_followup_distribution,
+    plot_km_by_zstar_risk,
+    plot_landmark_diagnostic,
 )
 from zstar.evaluation.downstream import GraftLossPredictor, train_downstream_head
 
@@ -59,6 +65,16 @@ LABEL_COLS = [
     "GraftSurvivalDays", "FailureWithinStudyPeriod",
     "PatientSurvivalDays", "DeathWithinStudyPeriod",
 ]
+
+# The labels are time-to-event pairs: a duration column plus its event mask.
+# `*Days` is the observed duration; `*WithinStudyPeriod` is True when the event
+# was observed at that duration and False when observation was censored there.
+SURVIVAL_PAIRS = {
+    "GraftSurvivalDays": ("GraftSurvivalDays", "FailureWithinStudyPeriod"),
+    "FailureWithinStudyPeriod": ("GraftSurvivalDays", "FailureWithinStudyPeriod"),
+    "PatientSurvivalDays": ("PatientSurvivalDays", "DeathWithinStudyPeriod"),
+    "DeathWithinStudyPeriod": ("PatientSurvivalDays", "DeathWithinStudyPeriod"),
+}
 
 BOOL_COLS_POPF = [
     "sex", "sex_donor", "donor_living", "cmv", "ebv", "cmv_donor_2l",
@@ -140,6 +156,7 @@ def run(
     apgf_path: str,
     output_dir: str = "zstar_output",
     label_col: str = "FailureWithinStudyPeriod",
+    landmark_day: Optional[float] = None,
     latent_dim: int = 32,
     fusion: str = "poe",
     apgf_encoder: str = "gru",
@@ -152,13 +169,45 @@ def run(
     if label_col not in LABEL_COLS:
         raise ValueError(f"label_col must be one of {LABEL_COLS}, got '{label_col}'")
 
+    duration_col, event_col = SURVIVAL_PAIRS[label_col]
+
     os.makedirs(output_dir, exist_ok=True)
+    plots_dir = os.path.join(output_dir, "plots")
 
     print("=" * 60)
     print("1. Loading and joining tables")
     popf_df = pd.read_csv(popf_path)
     apgf_df = pd.read_csv(apgf_path)
     print(f"  popf_v3: {popf_df.shape}   apgf: {apgf_df.shape}")
+
+    # Leakage diagnostic on the RAW data, before any landmark is applied --
+    # this is what shows whether a landmark is needed in the first place.
+    print("\n1b. Leakage diagnostic (raw data, pre-landmark)")
+    leak_report = plot_landmark_diagnostic(
+        apgf_df, popf_df, landmark_day=None, id_col=ID_COL,
+        timestamp_col="days_since_tx", duration_col=duration_col, event_col=event_col,
+        save_path=os.path.join(plots_dir, "landmark_diagnostic_raw.png"),
+    )
+    if leak_report:
+        print(f"  events: {leak_report['n_events']:,} | median gap to last observation: "
+              f"{leak_report['median_gap_days']:.0f}d")
+        print(f"  observations recorded AFTER the event: {leak_report['n_observation_after_event']:,}")
+        print(f"  events with an observation within 90d: {leak_report['n_within_90d']:,}")
+        if landmark_day is None and leak_report["n_within_90d"] > 0.1 * leak_report["n_events"]:
+            print("  [WARNING] A substantial share of events have observations recorded")
+            print("            close to (or after) the event. Without --landmark-day, downstream")
+            print("            metrics will likely reflect detecting the event already in")
+            print("            progress rather than forecasting it.")
+
+    if landmark_day is not None:
+        print(f"\n1c. Applying landmark cutoff at day {landmark_day:.0f}")
+        popf_df, temporal_out, lm_report = apply_landmark(
+            static_df=popf_df,
+            temporal_tables={"apgf": (apgf_df, "days_since_tx")},
+            landmark_day=landmark_day,
+            duration_col=duration_col, event_col=event_col, id_col=ID_COL,
+        )
+        apgf_df = temporal_out["apgf"]
 
     tables = {
         "popf": {
@@ -174,6 +223,10 @@ def run(
     }
     data_dict, ids, feature_columns = build_from_tables(tables, id_col=ID_COL)
     labels_df = popf_df.set_index(ID_COL).reindex(ids)[LABEL_COLS]
+
+    print("\n1d. Survival outcome overview")
+    plot_survival_overview(labels_df, save_path=os.path.join(plots_dir, "survival_overview.png"))
+    plot_followup_distribution(labels_df, save_path=os.path.join(plots_dir, "followup_distribution.png"))
 
     print("\n2. Building dataset")
     dataset = ZStarDataset(data_dict, normalize=True)
@@ -227,19 +280,48 @@ def run(
     print(f"  linear probe: {results_linear}")
     print(f"  mlp:          {results_mlp}")
 
+    if is_binary:
+        print("  [NOTE] These heads treat the event mask as a plain binary target, which")
+        print("         ignores censoring: a subject censored early counts as a negative")
+        print("         identical to one observed event-free for years. The C-index below")
+        print("         is the censoring-aware metric and should be preferred over AUROC.")
+
+    print("\n7b. Survival-aware evaluation")
+    durations = labels_df[duration_col].to_numpy(dtype=float)
+    events = np.asarray(labels_df[event_col].to_numpy()).astype(bool)
+
+    import torch as _torch
+    head_mlp.eval()
+    head_device = next(head_mlp.parameters()).device
+    with _torch.no_grad():
+        z_input = _torch.tensor(zstar_embeddings, dtype=_torch.float32, device=head_device)
+        raw_out = head_mlp(z_input)
+        scores = _torch.sigmoid(raw_out).cpu().numpy() if is_binary else raw_out.cpu().numpy()
+
+    # For a duration target, higher predicted survival = lower risk, so negate.
+    risk_scores = scores if is_binary else -scores
+    c_index = concordance_index(durations, events, risk_scores)
+    print(f"  C-index ({duration_col} / {event_col}): {c_index:.4f}   (0.5 = chance)")
+
+    plot_km_by_zstar_risk(
+        zstar_embeddings, durations, events, n_groups=4, method="kmeans",
+        title=f"{duration_col}: KM stratified by z-star clusters (unsupervised)",
+        save_path=os.path.join(plots_dir, "km_by_zstar_cluster.png"),
+    )
+    plot_km_by_zstar_risk(
+        zstar_embeddings, durations, events, n_groups=4, method="quantile",
+        risk_scores=risk_scores,
+        title=f"{duration_col}: KM stratified by predicted risk quartile",
+        save_path=os.path.join(plots_dir, "km_by_predicted_risk.png"),
+    )
+
     print("\n8. Generating plot report")
     downstream_plot_kwargs = None
     if is_binary:
-        import torch as _torch
-        head_mlp.eval()
-        head_device = next(head_mlp.parameters()).device
-        with _torch.no_grad():
-            z_input = _torch.tensor(zstar_embeddings, dtype=_torch.float32, device=head_device)
-            scores = _torch.sigmoid(head_mlp(z_input)).cpu().numpy()
         downstream_plot_kwargs = {"y_true": y, "y_scores": scores, "title": label_col}
 
     generate_full_report(
-        output_dir=os.path.join(output_dir, "plots"),
+        output_dir=plots_dir,
         history=history,
         modality_names=list(cfg.modalities.keys()),
         modality_types={n: cfg.modalities[n].type for n in cfg.modalities},
@@ -254,19 +336,44 @@ def run(
     print(f"Done. Outputs in: {output_dir}/")
     print("  - zstar_embeddings.npy, ids.npy, labels.csv")
     print("  - checkpoints/best_zstar.pt")
-    print("  - plots/ (training curves, pipeline diagram, ROC/PR, missingness, ...)")
+    print("  - plots/ (survival overview, KM by z-star, landmark diagnostic,")
+    print("            training curves, ROC/PR, missingness, ...)")
+    if landmark_day is None:
+        print("\n  Reminder: no landmark was applied. See plots/landmark_diagnostic_raw.png")
+        print("  before interpreting downstream performance -- observations recorded at or")
+        print("  near the event let a model detect rather than forecast it.")
     return {
         "zstar_embeddings": zstar_embeddings, "history": history,
-        "reconstruction": recon_metrics, "downstream": {"linear_probe": results_linear, "mlp": results_mlp},
+        "reconstruction": recon_metrics,
+        "downstream": {"linear_probe": results_linear, "mlp": results_mlp},
+        "c_index": c_index,
+        "leakage_report": leak_report,
     }
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run the z-star pipeline on real popf_v3 + apgf tables.")
+    parser = argparse.ArgumentParser(
+        description="Run the z-star pipeline on real popf_v3 + apgf tables.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Labels are time-to-event pairs (duration + censoring mask):\n"
+            "  GraftSurvivalDays   + FailureWithinStudyPeriod\n"
+            "  PatientSurvivalDays + DeathWithinStudyPeriod\n\n"
+            "Use --landmark-day to prevent leakage from observations recorded at or\n"
+            "near the event. Without it, downstream metrics likely reflect detecting\n"
+            "the event in progress rather than forecasting it."
+        ),
+    )
     parser.add_argument("--popf", required=True, help="Path to popf_v3.csv")
     parser.add_argument("--apgf", required=True, help="Path to apgf.csv")
     parser.add_argument("--output-dir", default="zstar_output")
     parser.add_argument("--label-col", default="FailureWithinStudyPeriod", choices=LABEL_COLS)
+    parser.add_argument(
+        "--landmark-day", type=float, default=None,
+        help="Landmark cutoff in days. Keeps only subjects still at risk at this "
+             "time, truncates apgf to observations at or before it, and predicts "
+             "the event after it. Strongly recommended (e.g. 365).",
+    )
     parser.add_argument("--latent-dim", type=int, default=32)
     parser.add_argument("--fusion", default="poe", choices=["poe", "moe", "attention", "concat"])
     parser.add_argument("--apgf-encoder", default="gru", choices=["gru", "lstm", "transformer", "tcn"])
@@ -279,7 +386,8 @@ def main():
 
     run(
         popf_path=args.popf, apgf_path=args.apgf, output_dir=args.output_dir,
-        label_col=args.label_col, latent_dim=args.latent_dim, fusion=args.fusion,
+        label_col=args.label_col, landmark_day=args.landmark_day,
+        latent_dim=args.latent_dim, fusion=args.fusion,
         apgf_encoder=args.apgf_encoder, imputation=args.imputation,
         include_missing_mask=not args.no_missing_mask,
         epochs=args.epochs, batch_size=args.batch_size, seed=args.seed,

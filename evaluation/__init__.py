@@ -15,3 +15,13 @@ from .plots import (
     plot_missingness,
     generate_full_report,
 )
+from .survival import (
+    kaplan_meier,
+    median_survival_time,
+    concordance_index,
+    plot_kaplan_meier,
+    plot_survival_overview,
+    plot_followup_distribution,
+    plot_km_by_zstar_risk,
+    plot_landmark_diagnostic,
+)

@@ -15,6 +15,7 @@ and missing-modality imputation.
 - [Status & scope](#status--scope)
 - [Installation](#installation)
 - [Quickstart](#quickstart)
+- [Survival labels, censoring, and landmarking](#survival-labels-censoring-and-landmarking)
 - [Plotting & reporting](#plotting--reporting)
 - [Architecture](#architecture)
 - [Modality types](#modality-types)
@@ -142,7 +143,7 @@ pipeline ships as a console command:
 
 ```bash
 pip install transplant-zstar1
-zstar-popf-apgf --popf popf_v3.csv --apgf apgf.csv --output-dir results/
+zstar-popf-apgf --popf popf_v3.csv --apgf apgf.csv --output-dir results/ --landmark-day 365
 ```
 
 This joins the two tables by `natt1`, applies the known column schema (boolean encoding,
@@ -153,6 +154,69 @@ writes a full plot report — all into `results/`. See `zstar/pipelines/popf_apg
 exact column lists and `--help` for every CLI flag (fusion strategy, encoder choice, imputation
 mode, label column, epochs, etc.). Runnable from Python directly as
 `from zstar.pipelines.popf_apgf import run`.
+
+---
+
+## Survival labels, censoring, and landmarking
+
+**Read this before interpreting any downstream metric.** The REXETRIS labels are
+time-to-event pairs, not binary targets:
+
+| Duration column | Event mask | Meaning |
+|---|---|---|
+| `GraftSurvivalDays` | `FailureWithinStudyPeriod` | Graft outcome |
+| `PatientSurvivalDays` | `DeathWithinStudyPeriod` | Patient outcome |
+
+The `*Days` column is the **observed duration**; the `*WithinStudyPeriod` flag is the
+**censoring mask** — `True` means the event was observed at that duration, `False` means
+observation *stopped* there with the event not yet observed.
+
+### Two traps this creates
+
+**1. Binary classification on the mask is statistically wrong.** It treats "censored at day 90"
+and "event-free through day 4000" as identical negatives. The `GraftLossPredictor` heads in
+`evaluation/downstream.py` do exactly this — they are kept for comparison and quick iteration,
+but **prefer the C-index** (`evaluation/survival.concordance_index`), which handles censoring
+correctly and is the survival analogue of AUROC. The pipeline reports both and prints a warning
+to this effect.
+
+**2. Leakage from observations recorded at or near the event.** If `apgf` checkups run right up
+to a graft failure, the model doesn't forecast the failure — it *observes* it (a creatinine
+measurement days before failure already shows function collapsing). Downstream AUROC then looks
+excellent while the model has no real predictive ability.
+
+The pipeline always writes `plots/landmark_diagnostic_raw.png` showing the gap between each
+subject's last observation and their event, and warns when a substantial share of events have
+observations recorded nearby. Negative gaps on that plot mean observations recorded *after* the
+event — a data-consistency problem in its own right.
+
+### The fix: `--landmark-day`
+
+```bash
+zstar-popf-apgf ... --landmark-day 365
+```
+
+Keeps only subjects still at risk at day 365, truncates `apgf` to observations at or before it,
+drops observations recorded after a subject's own event, and re-bases durations to measure
+forward from the landmark. The model then only ever sees information genuinely available at the
+landmark, so performance reflects forecasting rather than detection.
+
+To choose a landmark, `zstar.data.suggest_landmark_days(popf_df)` tabulates the trade-off
+(later landmark = more history but fewer retained subjects and fewer post-landmark events).
+
+### Survival visualization
+
+| Function | Purpose |
+|---|---|
+| `plot_survival_overview(labels_df)` | KM curve + event/censoring breakdown for both outcomes |
+| `plot_followup_distribution(labels_df)` | Observed durations split by event vs. censored |
+| `plot_kaplan_meier(durations, events, groups=...)` | KM curve, optionally stratified, with at-risk table |
+| `plot_km_by_zstar_risk(zstar, durations, events)` | **KM stratified by z-star** — whether the representation separates real risk groups |
+| `plot_landmark_diagnostic(apgf_df, popf_df)` | Leakage exposure: gap from last observation to event |
+| `concordance_index(durations, events, risk)` | Censoring-aware ranking metric (0.5 = chance) |
+
+Kaplan-Meier and the C-index are implemented directly on numpy (no `lifelines` /
+`scikit-survival` dependency) and are unit-checked against hand-computed values.
 
 ---
 
