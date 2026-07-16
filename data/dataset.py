@@ -80,6 +80,7 @@ class ZStarDataset(Dataset):
             else:
                 ts, vals = item
                 vals = (np.asarray(vals, dtype=np.float32) - mean) / std
+                vals = np.nan_to_num(vals, nan=0.0)
                 ts = np.asarray(ts, dtype=np.float32)
                 processed.append((torch.tensor(ts), torch.tensor(vals)))
                 masks.append(1.0)
