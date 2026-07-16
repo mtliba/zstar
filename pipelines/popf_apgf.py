@@ -232,8 +232,10 @@ def run(
     if is_binary:
         import torch as _torch
         head_mlp.eval()
+        head_device = next(head_mlp.parameters()).device
         with _torch.no_grad():
-            scores = _torch.sigmoid(head_mlp(_torch.tensor(zstar_embeddings, dtype=_torch.float32))).numpy()
+            z_input = _torch.tensor(zstar_embeddings, dtype=_torch.float32, device=head_device)
+            scores = _torch.sigmoid(head_mlp(z_input)).cpu().numpy()
         downstream_plot_kwargs = {"y_true": y, "y_scores": scores, "title": label_col}
 
     generate_full_report(
