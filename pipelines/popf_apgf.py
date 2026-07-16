@@ -3,7 +3,7 @@ One-command pipeline for the REXETRIS popf_v3 (baseline) + apgf (checkup)
 tables, as specified in BASELINE_AND_LONGITUDINAL_README.md and
 BASELINE_AND_LONGITUDINAL_GENERATION_NOTES.md.
 
-Usage (after `pip install transplant-zstar5`)
+Usage (after `pip install transplant-zstar4`)
 ---------------------------------------------
     zstar-popf-apgf --popf popf_v3.csv --apgf apgf.csv --output-dir results/
 
