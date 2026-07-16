@@ -39,6 +39,7 @@ from .competing_risks import (
     plot_competing_risks_overview,
     plot_head_training_dynamics,
     plot_cif_calibration,
+    plot_finetuning_comparison,
 )
 from .discrete_survival import (
     DiscreteTimeCompetingRisksHead,
@@ -47,4 +48,8 @@ from .discrete_survival import (
     train_competing_risks_head,
     make_time_bins,
     discretize,
+)
+from .finetune import (
+    train_end_to_end,
+    compare_finetuning_strategies,
 )

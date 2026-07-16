@@ -377,6 +377,84 @@ def plot_head_training_dynamics(
     _save(fig, save_path)
 
 
+def plot_finetuning_comparison(
+    results_by_mode: Dict[str, Dict],
+    cause_names: Optional[Dict[int, str]] = None,
+    save_path: Optional[str] = None,
+):
+    """
+    Frozen vs. fine-tuned vs. from-scratch.
+
+    Left  : held-out C-index per cause per mode. `scratch` is the reference
+            that says whether the SSL pretraining bought anything -- if it
+            matches `finetune`, it did not.
+    Middle: train-minus-val C-index gap, i.e. how much each mode overfits.
+            Fine-tuned/scratch arms have far more trainable parameters fitting
+            the same small number of events, so expect larger gaps.
+    Right : validation loss curves per mode.
+    """
+    cause_names = cause_names or CAUSE_NAMES
+    modes = list(results_by_mode.keys())
+    mode_colors = {"frozen": "#253E6B", "finetune": "#377860", "scratch": "#A56327"}
+
+    fig, axes = plt.subplots(1, 3, figsize=(16, 4.6))
+
+    # Held-out C-index per cause
+    ax = axes[0]
+    n_causes = len(cause_names)
+    width = 0.8 / max(n_causes, 1)
+    x = np.arange(len(modes))
+    for i, (c, name) in enumerate(cause_names.items()):
+        vals = [results_by_mode[m].get(f"c_index_val_cause{c}", np.nan) for m in modes]
+        ax.bar(x + i * width - width * (n_causes - 1) / 2, vals, width=width,
+               label=name, color=_PALETTE.get(c, "#999999"))
+        for xi, v in zip(x + i * width - width * (n_causes - 1) / 2, vals):
+            if np.isfinite(v):
+                ax.text(xi, v, f"{v:.3f}", ha="center", va="bottom", fontsize=7.5)
+    ax.axhline(0.5, linestyle="--", color="gray", linewidth=1)
+    ax.set_xticks(x); ax.set_xticklabels(modes)
+    ax.set_ylim(0, 1)
+    ax.set_ylabel("Held-out C-index")
+    ax.set_title("Discrimination by encoder treatment")
+    ax.legend(fontsize=8)
+    ax.grid(alpha=0.2, axis="y")
+
+    # Overfitting gap
+    ax = axes[1]
+    for i, (c, name) in enumerate(cause_names.items()):
+        gaps = [
+            results_by_mode[m].get(f"c_index_train_cause{c}", np.nan)
+            - results_by_mode[m].get(f"c_index_val_cause{c}", np.nan)
+            for m in modes
+        ]
+        ax.bar(x + i * width - width * (n_causes - 1) / 2, gaps, width=width,
+               label=name, color=_PALETTE.get(c, "#999999"))
+    ax.axhline(0, color="gray", linewidth=1)
+    ax.set_xticks(x); ax.set_xticklabels(modes)
+    ax.set_ylabel("C-index: train − val")
+    ax.set_title("Overfitting gap (higher = more overfit)")
+    ax.legend(fontsize=8)
+    ax.grid(alpha=0.2, axis="y")
+
+    # Val loss curves
+    ax = axes[2]
+    for m in modes:
+        h = results_by_mode[m]["history"]
+        ax.plot(h["epoch"], h["val_loss"], linewidth=1.8,
+                color=mode_colors.get(m, "#999999"),
+                label=f"{m} (best {results_by_mode[m]['best_val_loss']:.3f})")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Validation NLL")
+    ax.set_title("Validation loss")
+    ax.legend(fontsize=8)
+    ax.grid(alpha=0.2)
+
+    plt.suptitle("Frozen vs. fine-tuned vs. from-scratch encoder",
+                 fontsize=13, fontweight="bold")
+    plt.tight_layout()
+    _save(fig, save_path)
+
+
 def plot_cif_calibration(
     predicted_cif: np.ndarray,
     durations: np.ndarray,

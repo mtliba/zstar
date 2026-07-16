@@ -203,6 +203,35 @@ time bin, a distribution over `{no event, graft loss, death}`.
 Verified: recovers a known per-cause signal (C-index ≈ 0.66 for each of two independently
 generated causes) and returns to chance on shuffled labels.
 
+### Frozen vs. fine-tuned vs. from-scratch
+
+By default z-star is used **frozen** — a head is trained on fixed embeddings. That is cheap, but
+it cannot tell you whether the self-supervised pretraining contributed anything. Three arms,
+identical in split, head, schedule and seed, so differences are attributable:
+
+```bash
+zstar-popf-apgf ... --compare-finetuning --ft-epochs 30
+```
+
+| Arm | Encoder | Question it answers |
+|---|---|---|
+| `frozen` | fixed | Is the outcome decodable from z-star as pretrained? |
+| `finetune` | starts pretrained, keeps training at a lower LR | Does adapting the representation to the outcome help? |
+| `scratch` | randomly re-initialised, **no SSL at all** | Did the pretraining actually buy anything? |
+
+**`scratch` is the arm that makes this meaningful.** If it matches `finetune`, the pretraining
+added nothing and the encoder architecture plus the labels are doing all the work — worth
+knowing before claiming a foundational model is useful.
+
+`finetune`/`scratch` train ~40× more parameters than `frozen` against the same small number of
+events, so expect them to overfit more; `plot_finetuning_comparison` reports the train−val
+C-index gap per arm alongside the held-out scores. `encoder_lr` defaults below `head_lr` — the
+head is randomly initialised and must move fast, while the encoder already holds a
+representation that large updates would destroy.
+
+Available directly as `compare_finetuning_strategies(model, dataset, time, cause, cfg)`, or per
+arm via `train_end_to_end(..., mode="frozen"|"finetune"|"scratch")`.
+
 ### Two more traps
 
 **1. Binary classification on the mask is statistically wrong.** It treats "censored at day 90"

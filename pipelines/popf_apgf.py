@@ -62,7 +62,9 @@ from zstar.evaluation import (
     plot_cif_by_group,
     plot_head_training_dynamics,
     plot_cif_calibration,
+    plot_finetuning_comparison,
     train_competing_risks_head,
+    compare_finetuning_strategies,
     CAUSE_NAMES,
 )
 from zstar.evaluation.downstream import GraftLossPredictor, train_downstream_head
@@ -181,6 +183,8 @@ def run(
     progress: bool = True,
     cr_epochs: int = 200,
     cr_bins: int = 20,
+    compare_finetuning: bool = False,
+    ft_epochs: int = 30,
 ):
     if label_col not in LABEL_COLS:
         raise ValueError(f"label_col must be one of {LABEL_COLS}, got '{label_col}'")
@@ -362,6 +366,28 @@ def run(
             save_path=os.path.join(plots_dir, f"cif_by_zstar_cluster_{slug}.png"),
         )
 
+    ft_results = None
+    if compare_finetuning:
+        print("\n7c. Frozen vs. fine-tuned vs. from-scratch encoder")
+        print("     Same split, head, schedule and seed for all three arms, so any")
+        print("     difference is attributable to the encoder treatment alone.")
+        print("     'scratch' uses NO self-supervised pretraining -- if it matches")
+        print("     'finetune', the pretraining contributed nothing.")
+        ft_results = compare_finetuning_strategies(
+            model, dataset, cr_time, cr_cause, cfg=cfg,
+            n_bins=cr_bins, epochs=ft_epochs, batch_size=batch_size, seed=seed,
+        )
+        print("\n  Held-out C-index by encoder treatment:")
+        for m, r in ft_results.items():
+            parts = " ".join(
+                f"{nm}={r[f'c_index_val_cause{c}']:.4f}" for c, nm in CAUSE_NAMES.items()
+            )
+            print(f"    {m:<9}: {parts}   ({r['n_trainable_params']:,} trainable params)")
+        plot_finetuning_comparison(
+            ft_results,
+            save_path=os.path.join(plots_dir, "finetuning_comparison.png"),
+        )
+
     c_index = cr["c_index_val_cause1"]  # graft loss, held-out
 
     # Binary-head risk scores, for the legacy ROC/PR plots below (val split only)
@@ -416,6 +442,11 @@ def run(
             k: cr[k] for k in cr
             if k.startswith("c_index_") or k == "best_val_loss"
         },
+        "finetuning_comparison": (
+            {m: {k: v for k, v in r.items() if k.startswith("c_index_")
+                 or k in ("best_val_loss", "n_trainable_params")}
+             for m, r in ft_results.items()} if ft_results else None
+        ),
         "leakage_report": leak_report,
     }
 
@@ -455,6 +486,12 @@ def main():
                         help="Epochs for the competing-risks head.")
     parser.add_argument("--cr-bins", type=int, default=20,
                         help="Time bins for the discrete-time competing-risks model.")
+    parser.add_argument("--compare-finetuning", action="store_true",
+                        help="Also train fine-tuned and from-scratch encoders and compare "
+                             "against frozen z-star. ~3x the cost; the from-scratch arm is "
+                             "what tells you whether SSL pretraining helped.")
+    parser.add_argument("--ft-epochs", type=int, default=30,
+                        help="Epochs per arm for --compare-finetuning.")
     parser.add_argument("--no-progress", action="store_true",
                         help="Disable tqdm progress bars (useful when logs are scraped).")
     args = parser.parse_args()
@@ -468,6 +505,7 @@ def main():
         epochs=args.epochs, batch_size=args.batch_size, seed=args.seed,
         progress=not args.no_progress,
         cr_epochs=args.cr_epochs, cr_bins=args.cr_bins,
+        compare_finetuning=args.compare_finetuning, ft_epochs=args.ft_epochs,
     )
 
 

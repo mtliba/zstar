@@ -122,9 +122,15 @@ class ZStarModel(nn.Module):
 
         return result
 
-    @torch.no_grad()
-    def extract_zstar(self, batch: Dict) -> torch.Tensor:
-        self.eval()
+    def encode_and_fuse(self, batch: Dict) -> torch.Tensor:
+        """
+        Differentiable z-star: encode each present modality, fuse, return the
+        shared posterior mean. No decoders are run.
+
+        Unlike `extract_zstar`, this keeps the graph, so gradients flow back
+        into the encoders -- required to fine-tune the pretrained encoder
+        jointly with a downstream head.
+        """
         mus, log_vars, masks = {}, {}, {}
 
         for name in self.modality_names:
@@ -140,6 +146,12 @@ class ZStarModel(nn.Module):
 
         mu_shared, _ = self.fusion(mus, log_vars, masks)
         return mu_shared
+
+    @torch.no_grad()
+    def extract_zstar(self, batch: Dict) -> torch.Tensor:
+        """Frozen inference: deterministic z-star, no gradient."""
+        self.eval()
+        return self.encode_and_fuse(batch)
 
     @torch.no_grad()
     def impute(self, batch: Dict, target_modality: str) -> torch.Tensor:
